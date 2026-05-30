@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+*.db
+*.db-wal
+*.db-shm
+
+# Local Claude Code settings (machine-specific)
+.claude/settings.local.json

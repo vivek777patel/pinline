@@ -1,0 +1,305 @@
+# Pinline — Session Log
+
+Full record of the design + build session that produced this project.
+Date: 2026-05-29.
+
+---
+
+## 1. Design grilling (pre-build decisions)
+
+Every decision below was reached one question at a time before any code was written.
+
+### Who is it for?
+**Single-user, local, no auth.** "Team-wise" and "member-wise" views mean *your* view of
+work involving those people — nobody else logs in. Kills auth, accounts, server-for-others,
+and sync complexity in one call.
+
+### Form factor
+**Local web app** (localhost) with a fast quick-add bar. The center of gravity is *views*
+(four slices, priority sorting, timelines), which the terminal does poorly. Capture speed
+is solved by making the web input nearly as fast as a CLI, not by choosing CLI.
+
+### Core model — one entity or four?
+**One unified Pin with a `type` field.** Tasks, followups, and security findings share
+~90% of fields (title, priority, timeline, status, dimensions). Separate entities would
+mean four subsystems, four sort bugs, four archive views.
+
+**Project is a container** (one per Pin, FK). **Team / Person / Asset are dimensions**
+(many per Pin, join tables). The four "views" are filters/groupings over one table, not
+separate stores.
+
+### Lifecycle + dates
+**One shared lifecycle:** `Open → In Progress → Blocked → Done`. Findings add a
+*separate* **Remediation state** field (`triaged → in_remediation → remediated → verified`
++ `accepted_risk` / `false_positive`), not a different status system.
+
+**Six time fields:**
+- `created`, `last_touched` — automatic, always present.
+- `due`, `nudge`, `snooze`, `closed` — optional, user-set.
+
+**Nudge vs Snooze:**
+- **Nudge** = "resurface this to chase someone else on this date." Proactive.
+- **Snooze** = "hide this from my own list until this date." Deferral.
+
+### Priority engine
+**Hybrid: manual Importance × computed Urgency** (see ADR-0001).
+
+- **Importance** — manual bucket (`critical / high / medium / low`). Primary sort band.
+- **Urgency** — computed 0–100 from signals, recomputed at read time, never stored:
+
+| Signal | Effect |
+|---|---|
+| Overdue (past `due`) | +50, grows +3/day overdue (capped at +80 total from this signal) |
+| Due within 3 days | ramps up to +40 as it approaches |
+| Stale (`last_touched` > 7d) | +2/day, capped at +30 |
+| Nudge ≤ today | +25 |
+| Status = blocked | +20 (rises — it needs unblocking) |
+| Snoozed | hidden entirely until snooze passes |
+| Status = done | urgency = 0 |
+
+All signals cap at 100. Importance band is primary — a low-importance Pin can never
+outrank a critical one regardless of urgency. Deliberate, per ADR-0001.
+
+A Finding's **Severity** sets its default Importance (overridable): `critical→critical`,
+`high→high`, `medium→medium`, `low→low`, `info→low`.
+
+### Quick-add grammar
+One line; unrecognized tokens fall into the title (capture never blocks):
+
+| Token | Sets |
+|---|---|
+| `%task` `%fu` `%finding` (+ aliases) | type (default: task) |
+| `!crit` `!high` `!med` `!low` | importance |
+| `sev:critical` … `sev:info` | severity (implies `%finding`, sets default importance) |
+| `#project` | project (first wins if multiple; warns) |
+| `~team` | team (accumulates) |
+| `@person` | person (accumulates) |
+| `=asset` | asset (accumulates) |
+| `due:` `nudge:` `snooze:` | dates: `today`, `tomorrow`, `fri`, `3d`, `2w`, ISO |
+
+Sigil rationale: `@` = universal mention, `#` = file-under-bucket, `~` = the group
+(avoids clash with `@`/`#`), `=` = on/equals this target, `sev:` = namespaced keyword
+(avoids collision with `!` importance — severity and importance are related but distinct).
+
+### Views
+**One list, two controls: group-by + filter.** The four named views from the brief
+(*security findings, project-wise, team-wise, team-member-wise*) are:
+- `type = finding` — Findings view
+- `group by project` — Project view
+- `group by team` — Teams view
+- `group by person` — Members view
+
+Done Pins hidden by default (archive). 7-day agenda strip for upcoming due/nudge dates.
+
+### Stack
+**Node + TypeScript, `node:sqlite` (built-in, no native deps), Express, React + Vite.**
+SQLite: one portable `pinline.db` file (back up, sync, query with `sqlite3` directly).
+See ADR-0002. The `node:sqlite` choice (over `better-sqlite3`) was made because Node 26
+ships it built-in — zero native build steps, same on-disk format, same sync API.
+
+### Finding-specific fields
+- **Severity** — qualitative (`critical/high/medium/low/info`), not CVSS numeric.
+- **Asset** — filterable/groupable dimension (a first-class lens, not just free text).
+- **Remediation state** — `triaged/in_remediation/remediated/verified/accepted_risk/false_positive`.
+- **Reference** — optional URL/text (scanner link, advisory, CVE id).
+
+---
+
+## 2. Build — slice by slice
+
+### Slice 1 — Storage + Pin CRUD ✅
+- `src/db.ts` — opens + migrates the SQLite file (WAL mode, foreign keys on).
+- `src/pin.ts` — Pin types + CRUD (`create/get/list/update/delete`).
+- `src/server.ts` — Express REST routes (`GET/POST/PATCH/DELETE /api/pins`).
+- `src/index.ts` — entry point.
+- **Verify:** a Pin round-trips to the DB file across a fresh connection (proves it
+  persisted to disk, not just memory).
+
+### Slice 2 — Priority sort ✅
+- `src/priority.ts` — pure module: `urgency(pin, now)`, `isSnoozed`, `comparePins`,
+  `prioritize`. Urgency is **computed, never stored**.
+- `GET /api/pins` now returns priority-sorted, snooze-filtered list. Each Pin carries
+  a computed `urgency` field. `?all=true` returns the raw unfiltered list.
+- **Verify:** overdue/stale Pins float up; snoozed disappear; importance band always wins.
+
+### Slice 3 — Quick-add parser ✅
+- `src/quickadd.ts` — pure parser: `parseQuickAdd(text, now)` → `ParsedQuickAdd`.
+- `toCreateInput(parsed)` → `CreatePinInput` (maps parse result to `createPin`).
+- `POST /api/pins/quick { text }` — parses + creates, returns `{ pin, parsed }`.
+- Unrecognized tokens fall into the title. Unknown sigils fall into the title. Date
+  tokens that don't parse warn and stay in the title. Nothing ever blocks capture.
+- **Seam noted:** dimensions parsed and echoed but not yet persisted (slice 5 closes it).
+
+### Slice 4 — Home view ✅
+- `web/` — Vite + React + TypeScript frontend.
+- `vite.config.ts` — dev proxy `/api → :4000`; build output to `web/dist`.
+- `web/src/App.tsx` — quick-add form, priority-sorted card list, status dropdown.
+- `web/src/api.ts` — typed fetch helpers.
+- `src/server.ts` — serves `web/dist` when built; SPA fallback for client routes.
+- **One process in production** — `npm start` serves both API and frontend on :4000.
+
+### Slice 5 — Dimensions + views ✅
+- **Schema:** `projects/teams/persons/assets` tables; `pins.project_id` FK; join tables
+  `pin_teams/pin_persons/pin_assets` with `ON DELETE CASCADE`; foreign keys enforced.
+- **Design resolved here:** Project = one-per-Pin (FK); Team/Person/Asset = many (join
+  tables). Dimension rows de-duplicated by name (find-or-create), shared across Pins.
+- **`updatePin`** persists dimensions (replacing join links when provided).
+- **Slice-3 seam closed:** `toCreateInput` now passes parsed dimensions through to
+  `createPin`.
+- **Frontend:** sidebar menu (All / Findings / Projects / Teams / Members / Assets /
+  Archive), responsive card grid, group-by sections, type filter, clickable chips.
+
+### Slice 6 — Finding fields ✅
+- `sev:` keyword token added to the parser (maps to Severity enum).
+- `sev:` **implies `%finding`** when no `%type` is given.
+- **Severity → default Importance** in `createPin` (overridable by explicit `!`).
+- Frontend: severity badge per Finding card, remediation-state dropdown.
+- `SEVERITY_IMPORTANCE` map: `info → low`, rest map 1:1.
+
+### Slice 7 — Done archive + agenda strip ✅
+- **Archive:** Done Pins hidden from live views; Archive sidebar view shows them (sorted
+  newest-first by `closed`).
+- **Agenda strip:** a horizontal scroll track of upcoming `due`/`nudge` dates within 7
+  days, soonest first. Each card shows a day badge, kind tag (DUE/NUDGE), and title.
+
+---
+
+## 3. Post-plan delivery (features built after the 7 slices)
+
+### Futuristic design + card grid
+- Full dark theme redesign: neon/glass aesthetic, radial glows, CSS grid card layout,
+  glow on importance bands, monospace labels, soft severity pills.
+- **Before:** flat rows, plain controls. **After:** command-center look with a grid of
+  cards, colored bands that glow (critical = red, high = amber, medium = cyan).
+
+### Collapsible sidebar
+- `«` / `»` toggle button — collapses to 68px icon-only rail, expands to 234px with
+  labels.
+- State persisted in `localStorage` under key `pinline.sidebar`.
+- Menu item `title` attributes provide tooltips when collapsed.
+
+### Pin editor modal
+- **`web/src/PinEditor.tsx`** — click a Pin title or an agenda card to open.
+- Edits: title, type, importance, status, severity, remediation, `due`/`nudge`/`snooze`
+  (native date pickers), project, teams, people, assets (comma-separated), Delete.
+- Backend extended: `UpdatePinInput` now includes `teams/persons/assets`; `updatePin`
+  replaces dimension links when the patch provides those arrays (undefined = leave
+  unchanged).
+- **Delete** sends `DELETE /api/pins/:id` (cascades join rows, keeps dimension records).
+
+### Agenda card redesign
+- **Before:** a flat wrapping line of inline spans.
+- **After:** a strip with a header row (`⌁ NEXT 7 DAYS` + count pill) and a horizontal
+  scroll track of mini cards — day badge, kind tag, title (truncated).
+- Each card is clickable → opens the Pin editor.
+
+### Browser e2e harness
+- `test/e2e.mjs` — Playwright drives the real built app (Chromium headless) against a
+  temp DB. 14 checks covering: capture, views, chip-filter, editor (incl.
+  comma-separated teams/assets), remediation, archive, collapsible sidebar.
+- `npm run e2e` — spawns a fresh server, runs all checks, tears down.
+
+---
+
+## 4. Bugs found and fixed during the session
+
+### Stale server serving old `updatePin` code
+**Symptom:** editing Teams/Assets/People in the modal appeared to save (no error) but
+the values came back empty on reload. Project saved correctly.
+
+**Root cause:** the long-running server on port 4000 had been launched before the
+dimension-editing code was added to `updatePin`. Node doesn't hot-reload. Project already
+worked in the old code; the new team/asset logic was dead in that process.
+
+**Why tests didn't catch it:** unit tests and e2e each spawn a *fresh* server — they
+never hit the stale one.
+
+**Fix:** killed the stale process, restarted with `npm run dev:api` (Node `--watch` flag
+— auto-restarts on backend file changes). Also strengthened the e2e to edit Teams +
+Assets through the modal and assert the chips appear, so a regression will fail the suite.
+
+---
+
+## 5. Key technical choices (quick reference)
+
+| Choice | Decision | Why |
+|---|---|---|
+| SQLite driver | `node:sqlite` (built-in) | Node 26 ships it; zero native deps |
+| Urgency storage | computed at read time, never stored | avoids stale data; pure function is easy to test |
+| Dimensions | find-or-create by name | de-dup rows; chips show names not UUIDs |
+| Dimension update | replace join links when provided, leave unchanged if key absent | patch semantics — partial updates don't wipe unmentioned dims |
+| Frontend grouping | in-memory on the client | single-user dataset is small; avoids query-param API complexity |
+| Dev server | `npm run dev:api` (node --watch) | auto-restarts on backend changes; prevents stale-server class of bugs |
+
+---
+
+## 6. Files and commands
+
+### File map
+```
+src/
+  db.ts          open + migrate the SQLite database
+  pin.ts         Pin types, CRUD, dimension resolution
+  priority.ts    urgency() + prioritize() (pure, stateless)
+  quickadd.ts    quick-add parser
+  server.ts      REST routes + static frontend
+  index.ts       entry point
+web/src/
+  App.tsx        app shell, sidebar menu, card grid, agenda
+  PinEditor.tsx  edit modal
+  api.ts         typed fetch helpers
+  styles.css     futuristic dark theme
+test/
+  pin.test.ts          storage + CRUD
+  priority.test.ts     urgency formula + sort
+  quickadd.test.ts     parser grammar + HTTP endpoint
+  dimensions.test.ts   dimension persistence + cascade
+  finding.test.ts      sev: parser, severity→importance, remediation
+  update.test.ts       editing scalars + dimensions + dates
+  e2e.mjs              Playwright browser tests (14 checks)
+docs/
+  adr/0001-hybrid-importance-urgency-priority.md
+  adr/0002-sqlite-file-local-server.md
+  session-log.md       ← this file
+CONTEXT.md             domain glossary
+PLAN.md                build blueprint + file map + running instructions
+README.md              front-door documentation
+```
+
+### Commands
+```bash
+npm run build:web          # build the React frontend
+npm start                  # single process: API + frontend on :4000
+npm run dev:api            # backend with auto-reload (node --watch)
+npm run dev:web            # Vite dev server :5173 (proxies /api to :4000)
+npm test                   # 31 unit tests
+npm run e2e                # 14 Playwright browser tests
+npm run typecheck          # API TypeScript check
+npm run typecheck:web      # frontend TypeScript check
+```
+
+### Environment
+```
+PORT          default 4000
+PINLINE_DB    default ./pinline.db
+```
+
+---
+
+## 7. What's still open / natural next steps
+
+- **Dimension autocomplete** — the quick-add parser creates new dimensions on the fly;
+  an autocomplete dropdown while typing would prevent e.g. `#infra` and `#Infra`
+  becoming two projects.
+- **`npm run dev`** — a single command that runs both `dev:api` and `dev:web` in
+  parallel (e.g. with `concurrently`).
+- **GitHub Actions** — a CI workflow running `npm test` + `npm run e2e` on push.
+- **Editing dimensions as chips** — the editor currently uses comma-separated text
+  fields; proper chip inputs with add/remove would be more polished.
+- **Snooze-until date on agenda** — snoozed Pins are invisible; a "snoozed" section
+  showing when they'll resurface could be useful.
+- **Screenshots in README** — `docs/` folder with screenshots of the card grid,
+  collapsed sidebar, editor, and agenda.
+- **GH_TOKEN** — the `GH_TOKEN` env var in `~/.zshrc` holds an invalid token. Replace
+  with a valid PAT (repo scope) or use `unset GH_TOKEN && gh auth login` to store
+  credentials in the macOS Keychain instead of a dotfile.

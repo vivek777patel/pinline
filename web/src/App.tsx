@@ -14,6 +14,7 @@ import {
   type Status,
 } from "./api.ts";
 import { PinEditor } from "./PinEditor.tsx";
+import { ImportModal } from "./ImportModal.tsx";
 
 type DimKind = "project" | "team" | "person" | "asset";
 type View = "all" | "findings" | "project" | "team" | "person" | "asset" | "archive";
@@ -122,6 +123,29 @@ function unique(vals: string[]): string[] {
   return [...new Set(vals)].sort();
 }
 
+function csvCell(v: string | null | undefined): string {
+  if (v == null || v === "") return "";
+  const s = String(v);
+  if (/[,"\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportPins(pins: Pin[], filename: string) {
+  const header = "title,type,importance,status,description,due,nudge,snooze,severity,remediation_state,reference,project,teams,persons,assets";
+  const rows = pins.map((p) => [
+    p.title, p.type, p.importance, p.status, p.description,
+    p.due, p.nudge, p.snooze, p.severity, p.remediation_state,
+    p.reference, p.project,
+    p.teams.join("|"), p.persons.join("|"), p.assets.join("|"),
+  ].map(csvCell).join(","));
+  const csv = [header, ...rows].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function App() {
   const [pins, setPins] = useState<Pin[]>([]);
   const [text, setText] = useState("");
@@ -135,6 +159,7 @@ export default function App() {
   } | null>(null);
   const [qaActiveIdx, setQaActiveIdx] = useState(-1);
   const qaInputRef = useRef<HTMLInputElement>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("pinline.sidebar") === "collapsed"; }
     catch { return false; }
@@ -488,6 +513,22 @@ export default function App() {
             )}
           </div>
           <button type="submit">Pin it</button>
+          <button
+            type="button"
+            className="import-btn"
+            onClick={() => setImportOpen(true)}
+            title="Import CSV"
+          >
+            ⬆
+          </button>
+          <button
+            type="button"
+            className="export-btn"
+            onClick={() => exportPins(filtered, `pinline-${viewLabel.toLowerCase().replace(/[\s/]+/g, "-")}-export.csv`)}
+            title={`Export ${filtered.length} pin${filtered.length !== 1 ? "s" : ""} as CSV`}
+          >
+            ⬇
+          </button>
         </form>
 
         {/* Color legend */}
@@ -579,6 +620,13 @@ export default function App() {
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void load(); }}
           dimOptions={dimOptions}
+        />
+      )}
+
+      {importOpen && (
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onImported={() => { void load(); }}
         />
       )}
     </div>

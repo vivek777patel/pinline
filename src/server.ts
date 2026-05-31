@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import express from "express";
-import { createPin, deletePin, getPin, listPins, updatePin } from "./pin.ts";
+import { createPin, deletePin, getPin, listPins, updatePin, type CreatePinInput } from "./pin.ts";
 import { prioritize } from "./priority.ts";
 import { parseQuickAdd, toCreateInput } from "./quickadd.ts";
 
@@ -41,6 +41,24 @@ export function createServer(db: DatabaseSync): express.Express {
     } catch (err) {
       res.status(400).json({ error: (err as Error).message });
     }
+  });
+
+  app.post("/api/pins/bulk", (req, res) => {
+    const rows = req.body?.rows;
+    if (!Array.isArray(rows)) {
+      res.status(400).json({ error: "rows must be an array" });
+      return;
+    }
+    const created: ReturnType<typeof createPin>[] = [];
+    const errors: { row: number; message: string }[] = [];
+    (rows as unknown[]).forEach((row, i) => {
+      try {
+        created.push(createPin(db, row as CreatePinInput));
+      } catch (err) {
+        errors.push({ row: i + 1, message: (err as Error).message });
+      }
+    });
+    res.json({ created, errors });
   });
 
   app.get("/api/pins/:id", (req, res) => {

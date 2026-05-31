@@ -34,12 +34,36 @@ export interface Pin {
   last_touched: string;
   severity: Severity | null;
   remediation_state: RemediationState | null;
+  reference: string | null;
   description: string | null;
   project: string | null;
   teams: string[];
   persons: string[];
   assets: string[];
   urgency?: number;
+}
+
+export interface CreatePinInput {
+  title: string;
+  type?: PinType;
+  importance?: Importance;
+  status?: Status;
+  due?: string | null;
+  nudge?: string | null;
+  snooze?: string | null;
+  severity?: Severity | null;
+  remediation_state?: RemediationState | null;
+  reference?: string | null;
+  description?: string | null;
+  project?: string | null;
+  teams?: string[];
+  persons?: string[];
+  assets?: string[];
+}
+
+export interface BulkImportResult {
+  created: Pin[];
+  errors: { row: number; message: string }[];
 }
 
 async function unwrap(res: Response): Promise<unknown> {
@@ -79,6 +103,16 @@ export async function updatePin(id: string, body: Record<string, unknown>): Prom
 export async function deletePin(id: string): Promise<void> {
   const res = await fetch(`/api/pins/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("delete failed");
+}
+
+export async function bulkImport(rows: CreatePinInput[]): Promise<BulkImportResult> {
+  return (await unwrap(
+    await fetch("/api/pins/bulk", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rows }),
+    }),
+  )) as BulkImportResult;
 }
 
 async function patch(id: string, body: Record<string, unknown>): Promise<void> {

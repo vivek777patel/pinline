@@ -377,6 +377,24 @@ export default function App() {
           <button type="submit">Pin it</button>
         </form>
 
+        {/* Color legend */}
+        <div className="legend">
+          <span className="legend-group">
+            <span className="legend-label">Type →</span>
+            <span className="legend-item"><span className="legend-dot dot-finding" />Finding</span>
+            <span className="legend-item"><span className="legend-dot dot-task" />Task</span>
+            <span className="legend-item"><span className="legend-dot dot-followup" />Followup</span>
+          </span>
+          <span className="legend-sep" />
+          <span className="legend-group">
+            <span className="legend-label">Priority →</span>
+            <span className="legend-item"><span className="legend-dot dot-critical" />Critical</span>
+            <span className="legend-item"><span className="legend-dot dot-high" />High</span>
+            <span className="legend-item"><span className="legend-dot dot-medium" />Medium</span>
+            <span className="legend-item"><span className="legend-dot dot-low" />Low</span>
+          </span>
+        </div>
+
         {/* Filter bar — All view only */}
         {isAll && (
           <div className="fbar">
@@ -398,6 +416,10 @@ export default function App() {
             <div className="agenda-head">
               <span className="agenda-title">next 7 days</span>
               <span className="agenda-count">{agenda.length}</span>
+              <span className="agenda-key">
+                <span className="agenda-key-item"><span className="agenda-key-dot dot-due" />due date</span>
+                <span className="agenda-key-item"><span className="agenda-key-dot dot-nudge" />nudge / chase</span>
+              </span>
             </div>
             <div className="agenda-track">
               {agenda.map((a, i) => (

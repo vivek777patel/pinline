@@ -49,17 +49,23 @@ A **Pin** is the one core entity. Every Pin has:
 - a **type** — `task` (you do it), `followup` (you're waiting on someone), or `finding` (a security issue);
 - an **importance** you set (`critical / high / medium / low`);
 - a **status** — `open → in_progress → blocked → done`;
+- an optional **description** — free text for context, notes, or steps to reproduce (visible in the editor only, not on the card);
 - optional **dates** — `due`, `nudge`, `snooze` (plus automatic `created`, `last_touched`, `closed`);
-- optional **dimensions** — one **Project** (a container) and any number of **Teams**, **People**, and **Assets** (tags).
+- optional **dimensions** — one **Project / Engagement** (a container) and any number of **Teams**, **People / Members**, and **Assets / Apps / Services** (tags).
 
 **Findings** also carry a **severity** (`critical…info`) and a **remediation state**
 (`triaged → in_remediation → remediated → verified`, plus `accepted_risk` / `false_positive`).
 
 **Dimensions explained:**
-- **Project** — the work bucket a Pin belongs to (e.g. `infra`). One per Pin.
-- **Team** — the team it relates to (e.g. `platform`).
-- **Person** — a human it references (e.g. who a followup is waiting on).
-- **Asset** — the affected system/host/target (e.g. `api-gw-prod`). The "what's affected" axis, mainly for findings.
+
+| Dimension | Answers | Example |
+|---|---|---|
+| **Project / Engagement / Initiative** | "What work bucket / engagement is this under?" | `pentest-q2`, `api-hardening`, `soc2` |
+| **Team** | "Which team does this relate to?" | `platform`, `appsec` |
+| **Person / Member** | "Who is involved or being chased?" | `priya`, `marcus` |
+| **Asset / App / Service** | "What app, module, or service is affected?" | `api-gateway`, `auth-svc`, `payments-checkout` |
+
+Project and Asset are the most commonly confused — a finding can be under engagement `pentest-q2` (project) while the affected system is `api-gateway` (asset). They answer different questions.
 
 ---
 
@@ -110,24 +116,37 @@ Example:
 
 ---
 
+## Visual cues
+
+Every card carries two independent colour signals:
+
+| Signal | Location | Meaning |
+|---|---|---|
+| **Left border** | card left edge | **Type** — magenta = finding · violet = task · green = followup |
+| **Top bar** | card top edge | **Importance** — red = critical · amber = high · cyan = medium · gray = low |
+
+A **colour legend strip** above the grid explains both. The agenda header has a **due/nudge key** (amber = due date, green = nudge/chase).
+
 ## Views (sidebar menu)
 
-The sidebar is **collapsible** (state persists). Each item is a lens over the same
-prioritized list:
+The sidebar is **collapsible** (`«` / `»` button, state persists in localStorage). Each item is a lens over the same prioritized list:
 
-- **All** — every live Pin, priority-sorted.
-- **Findings** — only findings, with severity + remediation controls.
-- **Projects / Teams / Members / Assets** — grouped by that dimension.
-- **Archive** — Done Pins.
+- **All** — every live Pin, priority-sorted, with a full **filter bar** (type, importance, status, due, severity, remediation, project, team, person, asset). Active filters glow cyan; clear all with one click.
+- **Findings** — only findings, severity badge + remediation dropdown per card.
+- **Projects / Engagements** — grouped by project/engagement.
+- **Teams** — grouped by team.
+- **Members** — grouped by person/member.
+- **Assets / Apps / Services** — grouped by asset/app/service. Shows everything affecting a given system.
+- **Archive** — Done Pins, sorted newest-first.
 
-Click any **chip** on a card to filter to that value (e.g. `=api-gw-prod` → everything on
-that host). The **next-7-days agenda** strip surfaces upcoming due/nudge dates.
+Click any **chip** on a card to filter the current view to that value. The **next-7-days agenda** strip surfaces upcoming due/nudge dates — click a card to open the editor.
 
 ## Editing
 
 Click a Pin's **title** (or an **agenda card**) to open the editor. Every field is
-editable — title, type, importance, status, severity, remediation, `due`/`nudge`/`snooze`
-via date pickers, and project/teams/people/assets (comma-separated) — plus **Delete**.
+editable — title, description, type, importance, status, severity, remediation,
+`due`/`nudge`/`snooze` via date pickers, and project/teams/people/assets
+(comma-separated) — plus **Delete**.
 
 ---
 
@@ -179,6 +198,9 @@ docs/adr/        0001 priority model · 0002 SQLite-file storage
 ## Testing
 
 - **Unit:** `npm test` — 31 tests (storage round-trip, priority formula, quick-add parser,
-  dimension persistence, finding fields, editing).
+  dimension persistence, finding fields, editing, description field).
 - **Browser:** `npm run e2e` — 14 checks driving the real built app (capture → views →
-  chip-filter → editor incl. comma-separated dimensions → remediation → archive → collapse).
+  chip-filter → editor incl. comma-separated dimensions + description → remediation → archive → collapse).
+
+> **After any frontend change:** run `npm run build:web` then hard-refresh the browser
+> (`Cmd+Shift+R`) or open an incognito window — the browser caches the JS bundle aggressively.

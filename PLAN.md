@@ -22,7 +22,7 @@ glossary and [docs/adr/](./docs/adr/) for the two load-bearing decisions.
 ## Data model (sketch)
 
 **Pin**
-- `id`, `title`
+- `id`, `title`, `description?` (free text, editor-only)
 - `type`: `task | followup | finding`
 - `importance`: `critical | high | medium | low`
 - `status`: `open | in_progress | blocked | done`
@@ -33,8 +33,8 @@ glossary and [docs/adr/](./docs/adr/) for the two load-bearing decisions.
   `reference?` (url/text)
 
 **Dimensions** (resolved in slice 5):
-- `Project` — a container, **one per Pin**: `pins.project_id` FK.
-- `Team`, `Person`, `Asset` — taggable, **many per Pin**: join tables
+- `Project / Engagement / Initiative` — a container, **one per Pin**: `pins.project_id` FK.
+- `Team`, `Person / Member`, `Asset / App / Service` — taggable, **many per Pin**: join tables
   (`pin_teams`, `pin_persons`, `pin_assets`) with `ON DELETE CASCADE`.
 - Dimension rows are de-duplicated by name (find-or-create) and shared across Pins.
 
@@ -95,14 +95,24 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
 ## Delivered beyond the original plan
 
 - **Menu-driven views + grid + futuristic theme** — the group-by/filter controls became a
-  collapsible sidebar of named views (All / Findings / Projects / Teams / Members / Assets /
-  Archive); the list became a responsive card grid; the look is a neon/glass "command
-  center" (state of the collapsed sidebar persists in `localStorage`).
+  collapsible sidebar of named views (All / Findings / Projects/Engagements / Teams /
+  Members / Assets/Apps/Services / Archive); the list became a responsive card grid; the
+  look is a neon/glass "command center" (sidebar collapse state persists in `localStorage`).
+- **Type colour coding** — two independent visual signals per card: **left border** = type
+  (finding=magenta, task=violet, followup=green); **top bar** = importance (critical=red,
+  high=amber, medium=cyan, low=gray). Both explained by a **colour legend strip** shown
+  above the card grid, and a **due/nudge key** in the agenda header.
 - **Pin editor** (`web/src/PinEditor.tsx`) — click a Pin title or an agenda card to open a
-  modal that edits **every** field: title, type, importance, status, severity, remediation,
-  `due`/`nudge`/`snooze` via date pickers, and project/teams/people/assets (comma-separated).
-  Includes Delete. Backed by `updatePin` now replacing dimension links (`PATCH /api/pins/:id`).
-- **Agenda summary bar** — redesigned into a horizontal scroll track of mini cards.
+  modal that edits **every** field: title, description, type, importance, status, severity,
+  remediation, `due`/`nudge`/`snooze` via date pickers, and project/teams/people/assets
+  (comma-separated). Includes Delete. `updatePin` replaces dimension links on PATCH.
+- **Description field** — free-text `description` column on Pin. Shown only in the editor
+  (not on the card). DB back-fill migration auto-runs on server start.
+- **Filter bar** (All view) — dropdowns for every field: type, importance, status, due
+  (overdue/today/this week/no date), severity, remediation, project, team, person, asset.
+  Dimension dropdowns populated from live data. Active filters glow cyan; clear-all pill.
+- **Agenda summary bar** — redesigned into a horizontal scroll track of mini cards with a
+  header, count pill, and due/nudge colour key. Each card clickable → opens the editor.
 - **Browser e2e harness** — Playwright drives the built app end-to-end (`npm run e2e`).
 
 ## Running it

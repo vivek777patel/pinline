@@ -24,20 +24,20 @@ _Avoid_: reminder, ping, chase
 A Pin type. A security finding the user is tracking to resolution. Carries Finding-only fields: **Severity**, an **Asset** (the affected thing), a **Remediation state**, and an optional reference (URL/id).
 _Avoid_: vuln, issue, bug, vulnerability
 
-**Project**:
-A container that Pins belong to. Not itself a Pin and not tracked directly. Used to slice Pins in the project-wise view.
-_Avoid_: workstream, initiative, epic
+**Project / Engagement / Initiative**:
+A container that Pins belong to — the work bucket or engagement the work falls under (e.g. a pentest engagement, a security programme, a team initiative). Not itself a Pin and not tracked directly. One per Pin.
+_Avoid_: workstream, epic
 
 **Team**:
 A dimension tagged onto a Pin (the team the work relates to). Not a Pin. Powers the team-wise view.
 _Avoid_: group, squad
 
-**Person**:
-A dimension tagged onto a Pin — a human the Pin references (e.g. the person a Followup is waiting on). Not a Pin, not a login (the app is single-user). Powers the team-member-wise view.
-_Avoid_: User (reserved sense: there are no user accounts), assignee, owner, member
+**Person / Member**:
+A dimension tagged onto a Pin — a human the Pin references (e.g. the person a Followup is waiting on, or a team member involved in the work). Not a Pin, not a login (the app is single-user). Powers the members view.
+_Avoid_: User (reserved sense: there are no user accounts), assignee, owner
 
-**Asset**:
-A dimension tagged onto a Pin — the affected system/host/target (e.g. `api-gateway prod`, `acme.com`). Most relevant to Findings but available to any Pin. A first-class, filterable/groupable dimension alongside Project, Team, and Person.
+**Asset / App / Service**:
+A dimension tagged onto a Pin — the affected application, module, microservice, or host (e.g. `api-gateway`, `auth-svc`, `payments-checkout`, `acme.com`). Answers "what is broken or affected?" — distinct from Project which answers "what work bucket is this under?". Most relevant to Findings but available to any Pin. A first-class, filterable/groupable dimension alongside Project, Team, and Person.
 _Avoid_: target, host, system, resource
 
 **Severity**:
@@ -76,7 +76,12 @@ _Avoid_: reminder, ping, followup-date
 A date that *hides a Pin from the user's own list until then*. Deferral of one's own attention: "don't show me this until Monday." Distinct from Nudge — Nudge is about chasing another person; Snooze is about suppressing the Pin from view.
 _Avoid_: defer, hide, mute
 
+**Description**:
+A free-text field on a Pin for additional context, notes, steps to reproduce, or links. Not a domain concept — it is implementation detail. Stored in the DB; visible only in the editor modal, not on the card.
+_Avoid_: notes, body, content
+
 ## Flagged ambiguities
 
 - **Priority vs Severity**: "Severity" is a Finding-specific attribute (how bad the security issue is). "Priority" is the cross-cutting attribute that orders *all* Pins. They are not the same and may feed into each other rather than be equated.
 - **Person vs User**: There are no user accounts (single-user app). "Person" never means "someone who logs in."
+- **Project vs Asset**: "Project / Engagement" = the work bucket (what initiative does this belong to?). "Asset / App / Service" = the affected thing (what has the problem?). A finding on `api-gateway` filed under engagement `pentest-q2` has distinct values for each.

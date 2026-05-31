@@ -362,14 +362,11 @@ PINLINE_DB    default ./pinline.db
 
 ## 7. What's still open / natural next steps
 
-- **Dimension autocomplete** — the quick-add parser creates new dimensions on the fly;
-  an autocomplete dropdown while typing would prevent e.g. `#infra` and `#Infra`
-  becoming two projects.
 - **`npm run dev`** — a single command that runs both `dev:api` and `dev:web` in
   parallel (e.g. with `concurrently`).
 - **GitHub Actions** — a CI workflow running `npm test` + `npm run e2e` on push.
 - **Editing dimensions as chips** — the editor currently uses comma-separated text
-  fields; proper chip inputs with add/remove would be more polished.
+  fields with autocomplete; proper chip inputs with add/remove would be more polished.
 - **Snooze-until date on agenda** — snoozed Pins are invisible; a "snoozed" section
   showing when they'll resurface could be useful.
 - **Screenshots in README** — `docs/` folder with screenshots of the card grid,
@@ -381,3 +378,56 @@ PINLINE_DB    default ./pinline.db
   the Findings view could benefit from severity/remediation filters.
 - **e2e coverage for filter bar** — the Playwright suite doesn't yet cover the new
   filter bar interactions.
+
+---
+
+## 8. Post-plan session (2026-05-30 continued)
+
+### Dimension autocomplete
+
+Added live autocomplete to both the quick-add bar and the editor modal for all four
+dimensions (project, team, person, asset).
+
+**Quick-add bar:** as the user types after a dimension sigil (`#`, `~`, `@`, `=`), the
+app detects the active token by scanning backwards from the cursor, looks up matching
+existing names, and shows a dropdown below the input. Selecting a suggestion replaces
+the token and adds a trailing space so the next token can follow immediately. Multiple
+dimension tokens in one line each trigger their own suggestion cycle.
+
+**Editor modal:** each dimension field is now a `SuggestInput` component. Project
+(single value) suggests against the full field value. Teams/Persons/Assets
+(comma-separated) suggest for the last comma-separated token, appending `", "` on
+selection so the user can immediately type another value.
+
+**Data source:** suggestion lists come from the already-loaded pins (no new API
+endpoint). All pins are used (not just live), so archived project names are still
+suggested. The existing `dimOptions` memo was split into `liveDimOptions` (for the
+filter bar, live pins only) and `dimOptions` (for autocomplete, all pins).
+
+**Key implementation detail:** Escape inside `SuggestInput` calls `stopPropagation()`
+to prevent the editor's global Escape listener from closing the modal when the user
+just wants to dismiss a suggestion dropdown.
+
+New file: `web/src/SuggestInput.tsx` — reusable component with `single` and `multi`
+(comma-separated) modes, keyboard navigation (ArrowUp/Down, Enter, Escape), and the
+standard blur+mousedown timing trick to avoid race conditions.
+
+### Card chip overflow
+
+Cards with more than 3 dimension chips previously stretched tall, making the grid
+uneven when a Pin had many people/teams/assets.
+
+Fix: the first 3 chips across all dimensions are shown; any remainder is collapsed into
+a muted `+N more` pill. Clicking the pill opens the editor where all dimensions are
+visible. Card height is now uniform regardless of dimension count.
+
+### Pushpin logo and favicon
+
+Replaced the `◈` Unicode character (sidebar logo) and the earlier map-marker SVG
+(which read as a location pin, not a task pin) with the Material Design `push_pin` icon
+— a thumbtack/pushpin shape (flat head, tapered body, needle) that reads as "pinning
+something to a board".
+
+- `web/public/favicon.svg` — pushpin on a dark rounded-square background, used as
+  the browser-tab favicon via `<link rel="icon">` in `index.html`.
+- `web/src/App.tsx` — sidebar logo is the same SVG inline (22×22, cyan fill).

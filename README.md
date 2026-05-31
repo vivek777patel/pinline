@@ -8,7 +8,7 @@ urgent ones on top, and you slice them by project, team, person, or asset throug
 sidebar of named views.
 
 - **No accounts, no cloud** — runs on `localhost`, all data in one portable `pinline.db` file.
-- **Capture in one line** — `%finding =api-gw expired cert #infra ~platform sev:critical due:fri`
+- **Capture in one line** — `%finding =api-gw expired cert #infra ~platform sev:critical due:fri` with dimension autocomplete as you type
 - **Self-sorting** — importance is yours to set; urgency rises on its own as deadlines and staleness build.
 
 > Design rationale lives in [CONTEXT.md](./CONTEXT.md) (glossary), [PLAN.md](./PLAN.md)
@@ -139,14 +139,15 @@ The sidebar is **collapsible** (`«` / `»` button, state persists in localStora
 - **Assets / Apps / Services** — grouped by asset/app/service. Shows everything affecting a given system.
 - **Archive** — Done Pins, sorted newest-first.
 
-Click any **chip** on a card to filter the current view to that value. The **next-7-days agenda** strip surfaces upcoming due/nudge dates — click a card to open the editor.
+Click any **chip** on a card to filter the current view to that value. Cards with more than 3 dimension chips show a **+N more** pill — click it to open the editor and see all. The **next-7-days agenda** strip surfaces upcoming due/nudge dates — click a card to open the editor.
 
 ## Editing
 
 Click a Pin's **title** (or an **agenda card**) to open the editor. Every field is
 editable — title, description, type, importance, status, severity, remediation,
-`due`/`nudge`/`snooze` via date pickers, and project/teams/people/assets
-(comma-separated) — plus **Delete**.
+`due`/`nudge`/`snooze` via date pickers, and project/teams/people/assets — plus **Delete**.
+
+Dimension fields have **live autocomplete**: as you type, matching existing names appear in a dropdown (arrow keys or click to select, Escape to dismiss). New names are always accepted. This prevents accidental duplicates like `#infra` vs `#Infra`.
 
 ---
 
@@ -185,10 +186,11 @@ src/
   server.ts      REST routes + static frontend
   index.ts       entry point
 web/src/
-  App.tsx        app shell, sidebar views, card grid, agenda
-  PinEditor.tsx  the edit modal
-  api.ts         typed fetch helpers
-  styles.css     the theme
+  App.tsx          app shell, sidebar views, card grid, agenda
+  PinEditor.tsx    the edit modal
+  SuggestInput.tsx reusable autocomplete input component
+  api.ts           typed fetch helpers
+  styles.css       the theme
 test/
   *.test.ts      node:test unit tests
   e2e.mjs        Playwright browser tests

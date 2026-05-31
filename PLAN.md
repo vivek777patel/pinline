@@ -65,8 +65,7 @@ One line; unrecognized tokens fall into the title (never blocks capture).
 | `sev:level` | Severity (`critical/high/med/low/info`); implies `%finding` and sets default Importance |
 | `due:` `nudge:` `snooze:` | dates (`today fri tomorrow 3d 2w`, weekday names, ISO) |
 
-Dimension names are auto-created on capture. (Future: live autocomplete against existing
-values.) Post-capture, all fields are editable in the Pin editor (see below).
+Dimension names are auto-created on capture. The quick-add bar shows a **live autocomplete dropdown** as you type after a sigil — matching existing names appear so you can select instead of re-typing. Post-capture, all fields are editable in the Pin editor (see below), which also has autocomplete on every dimension field.
 
 ## Views
 
@@ -114,6 +113,9 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
 - **Agenda summary bar** — redesigned into a horizontal scroll track of mini cards with a
   header, count pill, and due/nudge colour key. Each card clickable → opens the editor.
 - **Browser e2e harness** — Playwright drives the built app end-to-end (`npm run e2e`).
+- **Dimension autocomplete** — typing after a dimension sigil in the quick-add bar (or in any dimension field of the editor) shows a filtered dropdown of existing names. Prevents duplicate dimension entries from spelling variations. Implemented in `SuggestInput.tsx` (reusable component; single and multi/comma-separated modes). No backend changes — suggestion data comes from the already-loaded pins.
+- **Card chip overflow** — cards with more than 3 dimension chips show the first 3 then a muted `+N more` pill that opens the editor. Keeps card heights uniform regardless of how many people/teams/assets a Pin has.
+- **Thumbtack logo + favicon** — sidebar logo and browser-tab favicon use an SVG pushpin/thumbtack icon (`web/public/favicon.svg`), replacing the earlier map-marker shape.
 
 ## Running it
 
@@ -134,7 +136,8 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
 ```
 src/            db.ts (schema/migrate) · pin.ts (model + CRUD) · priority.ts (urgency/sort)
                 quickadd.ts (parser) · server.ts (REST + static) · index.ts (entry)
-web/src/        App.tsx (shell + views) · PinEditor.tsx · api.ts · styles.css
+web/src/        App.tsx (shell + views) · PinEditor.tsx · SuggestInput.tsx · api.ts · styles.css
+web/public/     favicon.svg (pushpin icon)
 test/           *.test.ts (node:test) · e2e.mjs (Playwright)
 docs/adr/       0001 priority model · 0002 SQLite-file storage
 CONTEXT.md      domain glossary    PLAN.md  this file

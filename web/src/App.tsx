@@ -413,7 +413,12 @@ export default function App() {
           {collapsed ? "»" : "«"}
         </button>
         <div className="brand">
-          <span className="logo" aria-hidden>◈</span>
+          <span className="logo" aria-hidden>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="#00eaff">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+              <circle cx="12" cy="9" r="2.5" fill="#04060d"/>
+            </svg>
+          </span>
           <div className="brand-text">
             <h1>PINLINE</h1>
             <p className="tagline">command center</p>

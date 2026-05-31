@@ -34,6 +34,7 @@ export interface Pin {
   last_touched: string;
   severity: Severity | null;
   remediation_state: RemediationState | null;
+  description: string | null;
   project: string | null;
   teams: string[];
   persons: string[];

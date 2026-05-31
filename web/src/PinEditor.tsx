@@ -21,6 +21,7 @@ const csv = (s: string): string[] => s.split(",").map((x) => x.trim()).filter(Bo
 
 export function PinEditor({ pin, onClose, onSaved }: { pin: Pin; onClose: () => void; onSaved: () => void }) {
   const [title, setTitle] = useState(pin.title);
+  const [description, setDescription] = useState(pin.description ?? "");
   const [type, setType] = useState<PinType>(pin.type);
   const [importance, setImportance] = useState<Importance>(pin.importance);
   const [status, setStatus] = useState<Status>(pin.status);
@@ -56,6 +57,7 @@ export function PinEditor({ pin, onClose, onSaved }: { pin: Pin; onClose: () => 
         status,
         severity: severity || null,
         remediation_state: remediation || null,
+        description: description.trim() || null,
         due: fromDate(due),
         nudge: fromDate(nudge),
         snooze: fromDate(snooze),
@@ -96,6 +98,16 @@ export function PinEditor({ pin, onClose, onSaved }: { pin: Pin; onClose: () => 
         <label className="field">
           <span>Title</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+        </label>
+
+        <label className="field">
+          <span>Description</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Additional context, notes, steps to reproduce, links…"
+            rows={3}
+          />
         </label>
 
         <div className="field-row">
@@ -174,20 +186,20 @@ export function PinEditor({ pin, onClose, onSaved }: { pin: Pin; onClose: () => 
         </div>
 
         <label className="field">
-          <span>Project</span>
-          <input value={project} onChange={(e) => setProject(e.target.value)} placeholder="one project" />
+          <span>Project / Engagement / Initiative</span>
+          <input value={project} onChange={(e) => setProject(e.target.value)} placeholder="one project or engagement" />
         </label>
         <div className="field-row">
           <label className="field">
             <span>Teams</span>
-            <input value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="comma, separated" />
+            <input value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="platform, secops" />
           </label>
           <label className="field">
-            <span>People</span>
-            <input value={persons} onChange={(e) => setPersons(e.target.value)} placeholder="comma, separated" />
+            <span>People / Members</span>
+            <input value={persons} onChange={(e) => setPersons(e.target.value)} placeholder="priya, marcus" />
           </label>
           <label className="field">
-            <span>Assets</span>
+            <span>Assets / Apps / Services</span>
             <input value={assets} onChange={(e) => setAssets(e.target.value)} placeholder="comma, separated" />
           </label>
         </div>

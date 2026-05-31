@@ -51,9 +51,12 @@ function migrate(db: DatabaseSync): void {
     );
   `);
 
-  // Back-fill project_id for databases created before slice 5.
+  // Back-fill columns added after the initial schema.
   const cols = db.prepare("PRAGMA table_info(pins)").all() as { name: string }[];
   if (!cols.some((c) => c.name === "project_id")) {
     db.exec("ALTER TABLE pins ADD COLUMN project_id TEXT REFERENCES projects(id)");
+  }
+  if (!cols.some((c) => c.name === "description")) {
+    db.exec("ALTER TABLE pins ADD COLUMN description TEXT");
   }
 }

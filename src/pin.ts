@@ -29,6 +29,7 @@ export interface Pin {
   severity: Severity | null;
   remediation_state: RemediationState | null;
   reference: string | null;
+  description: string | null;
   project: string | null; // container — at most one
   teams: string[];
   persons: string[];
@@ -51,6 +52,7 @@ interface PinRow {
   severity: Severity | null;
   remediation_state: RemediationState | null;
   reference: string | null;
+  description: string | null;
   project_id: string | null;
 }
 
@@ -65,6 +67,7 @@ export interface CreatePinInput {
   severity?: Severity | null;
   remediation_state?: RemediationState | null;
   reference?: string | null;
+  description?: string | null;
   project?: string | null;
   teams?: string[];
   persons?: string[];
@@ -84,6 +87,7 @@ export interface UpdatePinInput {
   severity?: Severity | null;
   remediation_state?: RemediationState | null;
   reference?: string | null;
+  description?: string | null;
   project?: string | null;
   teams?: string[];
   persons?: string[];
@@ -92,7 +96,7 @@ export interface UpdatePinInput {
 
 const ROW_COLUMNS = [
   "id", "title", "type", "importance", "status", "created", "last_touched",
-  "due", "nudge", "snooze", "closed", "severity", "remediation_state", "reference", "project_id",
+  "due", "nudge", "snooze", "closed", "severity", "remediation_state", "reference", "description", "project_id",
 ] as const;
 
 const UPDATABLE = ROW_COLUMNS.filter((c) => c !== "id" && c !== "created");
@@ -199,6 +203,7 @@ export function createPin(db: DatabaseSync, input: CreatePinInput): Pin {
     severity: input.severity ?? null,
     remediation_state: input.remediation_state ?? null,
     reference: input.reference ?? null,
+    description: input.description ?? null,
     project_id: input.project ? resolveName(db, "projects", input.project) : null,
   };
   insertRow(db, row);
@@ -223,7 +228,7 @@ export function updatePin(db: DatabaseSync, id: string, patch: UpdatePinInput): 
   if (!row) return undefined;
 
   const merged: PinRow = { ...row };
-  const scalars = ["title", "type", "importance", "status", "due", "nudge", "snooze", "severity", "remediation_state", "reference"] as const;
+  const scalars = ["title", "type", "importance", "status", "due", "nudge", "snooze", "severity", "remediation_state", "reference", "description"] as const;
   for (const c of scalars) {
     if (patch[c] !== undefined) (merged[c] as PinRow[typeof c]) = patch[c] as PinRow[typeof c];
   }

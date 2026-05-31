@@ -25,6 +25,7 @@ function makePin(o: Partial<Pin> = {}): Pin {
     severity: o.severity ?? null,
     remediation_state: o.remediation_state ?? null,
     reference: o.reference ?? null,
+    description: o.description ?? null,
     project: o.project ?? null,
     teams: o.teams ?? [],
     persons: o.persons ?? [],

@@ -750,6 +750,16 @@ h1 {
   background: rgba(255, 43, 214, 0.1);
   border-color: rgba(255, 43, 214, 0.24);
 }
+.chip-overflow {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.chip-overflow:hover {
+  color: var(--text-2);
+  filter: none;
+  transform: none;
+}
 .filter-active {
   color: #04060d !important;
   font-weight: 700;

@@ -346,14 +346,25 @@ export default function App() {
               </select>
             )}
           </span>
-          {(p.project !== null || p.teams.length > 0 || p.persons.length > 0 || p.assets.length > 0) && (
-            <span className="chips">
-              {p.project && chip("project", p.project)}
-              {p.teams.map((t) => chip("team", t))}
-              {p.persons.map((t) => chip("person", t))}
-              {p.assets.map((t) => chip("asset", t))}
-            </span>
-          )}
+          {(p.project !== null || p.teams.length > 0 || p.persons.length > 0 || p.assets.length > 0) && (() => {
+            const all: { kind: DimKind; value: string }[] = [
+              ...(p.project ? [{ kind: "project" as DimKind, value: p.project }] : []),
+              ...p.teams.map((v) => ({ kind: "team" as DimKind, value: v })),
+              ...p.persons.map((v) => ({ kind: "person" as DimKind, value: v })),
+              ...p.assets.map((v) => ({ kind: "asset" as DimKind, value: v })),
+            ];
+            const overflow = all.length - 3;
+            return (
+              <span className="chips">
+                {all.slice(0, 3).map(({ kind, value }) => chip(kind, value))}
+                {overflow > 0 && (
+                  <button type="button" className="chip chip-overflow" onClick={() => setEditing(p)}>
+                    +{overflow} more
+                  </button>
+                )}
+              </span>
+            );
+          })()}
         </div>
         <div className="foot">
           <select

@@ -116,6 +116,7 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
 - **Dimension autocomplete** — typing after a dimension sigil in the quick-add bar (or in any dimension field of the editor) shows a filtered dropdown of existing names. Prevents duplicate dimension entries from spelling variations. Implemented in `SuggestInput.tsx` (reusable component; single and multi/comma-separated modes). No backend changes — suggestion data comes from the already-loaded pins.
 - **Card chip overflow** — cards with more than 3 dimension chips show the first 3 then a muted `+N more` pill that opens the editor. Keeps card heights uniform regardless of how many people/teams/assets a Pin has.
 - **Thumbtack logo + favicon** — sidebar logo and browser-tab favicon use an SVG pushpin/thumbtack icon (`web/public/favicon.svg`), replacing the earlier map-marker shape.
+- **DB query optimisation** — `listPins()` replaced the N+1 pattern (4N+1 queries for N pins) with a single `LEFT JOIN + GROUP_CONCAT` query. Also added `idx_pins_created` index and 8 MB `cache_size` pragma. See `docs/session-log.md` section 9.
 
 ## Running it
 

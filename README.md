@@ -176,6 +176,9 @@ All under `/api`. Pins return their dimension **names** and a computed `urgency`
 - **Schema** — `pins` (+ `project_id` FK), dimension tables `projects/teams/persons/assets`,
   and join tables `pin_teams/pin_persons/pin_assets` (`ON DELETE CASCADE`). Dimension rows
   are de-duplicated by name and shared across Pins.
+- **Query strategy** — `listPins()` uses a single `LEFT JOIN + GROUP_CONCAT` query to load
+  all pins and their dimensions in one round-trip (not N+1). Index on `pins(created DESC)`
+  covers the sort; 8 MB page cache set on open.
 
 ```
 src/

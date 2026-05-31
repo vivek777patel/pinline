@@ -304,6 +304,7 @@ Assets through the modal and assert the chips appear, so a regression will fail 
 | Dimension update | replace join links when provided, leave unchanged if key absent | patch semantics — partial updates don't wipe unmentioned dims |
 | Frontend grouping | in-memory on the client | single-user dataset is small; avoids query-param API complexity |
 | Dev server | `npm run dev:api` (node --watch) | auto-restarts on backend changes; prevents stale-server class of bugs |
+| `listPins()` query | single LEFT JOIN + GROUP_CONCAT | eliminates 4N+1 per-pin queries; see section 9 |
 
 ---
 
@@ -431,3 +432,64 @@ something to a board".
 - `web/public/favicon.svg` — pushpin on a dark rounded-square background, used as
   the browser-tab favicon via `<link rel="icon">` in `index.html`.
 - `web/src/App.tsx` — sidebar logo is the same SVG inline (22×22, cyan fill).
+
+---
+
+## 9. DB query optimization (2026-05-31)
+
+### Problem: N+1 query pattern in `listPins()`
+
+Every page load and every status/remediation change called `listPins()`, which ran
+`SELECT * FROM pins` and then called `assemble()` for each row. `assemble()` fired 4
+queries per pin:
+
+- `SELECT name FROM projects WHERE id = ?` — project name lookup
+- `SELECT d.name FROM pin_teams JOIN teams WHERE pin_id = ?` — team names
+- `SELECT d.name FROM pin_persons JOIN persons WHERE pin_id = ?` — person names
+- `SELECT d.name FROM pin_assets JOIN assets WHERE pin_id = ?` — asset names
+
+At 100 pins: **401 queries per load**. At 500 pins: **2001 queries**. The pattern was
+identified during a performance audit prompted by growing dimension usage.
+
+### Fix: single LEFT JOIN + GROUP_CONCAT query
+
+Replaced the N+1 loop with a single SQL query using `LEFT JOIN` across all four
+dimension relationships and `GROUP_CONCAT(DISTINCT ...)` to aggregate names:
+
+```sql
+SELECT p.*, pr.name AS project_name,
+  GROUP_CONCAT(DISTINCT t.name)  AS teams_csv,
+  GROUP_CONCAT(DISTINCT pe.name) AS persons_csv,
+  GROUP_CONCAT(DISTINCT a.name)  AS assets_csv
+FROM pins p
+LEFT JOIN projects pr ON pr.id = p.project_id
+LEFT JOIN pin_teams pt ON pt.pin_id = p.id  LEFT JOIN teams t ON t.id = pt.team_id
+LEFT JOIN pin_persons pp ON pp.pin_id = p.id  LEFT JOIN persons pe ON pe.id = pp.person_id
+LEFT JOIN pin_assets pa ON pa.pin_id = p.id  LEFT JOIN assets a ON a.id = pa.asset_id
+GROUP BY p.id ORDER BY p.created DESC
+```
+
+Result: comma-separated name strings are split (`.split(",").sort()`) in memory. The
+`.sort()` is necessary because `GROUP_CONCAT(DISTINCT ...)` doesn't guarantee order,
+and tests assert alphabetical dimension order.
+
+Query count: **always 1** regardless of pin count.
+
+`assemble()` is preserved unchanged — still used by `getPin()`, `createPin()`, and
+`updatePin()` where single-pin 4-query cost is negligible.
+
+### Additional tuning
+
+- **`idx_pins_created` index** added in `migrate()` —`ORDER BY created DESC` in
+  `listPins()` was doing a full scan; the index makes it a seek.
+- **`PRAGMA cache_size = -8000`** set on DB open — 8 MB page cache, improves
+  repeated reads from the WAL.
+
+### Key implementation note
+
+`PinListRow extends PinRow` was added as a local interface to type the JOIN query
+result. `project_id` is destructured out (matching `assemble()`'s behaviour) and
+`project_name` maps to `project: string | null` in the returned `Pin`.
+
+All 31 unit tests pass unchanged, including `update.test.ts` which asserts sorted
+dimension arrays (`["appsec", "secops"]`).

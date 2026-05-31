@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   fetchPins,
   quickAdd,
@@ -130,6 +130,11 @@ export default function App() {
   const [dimFilter, setDimFilter] = useState<{ kind: DimKind; value: string } | null>(null);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [editing, setEditing] = useState<Pin | null>(null);
+  const [qaDropdown, setQaDropdown] = useState<{
+    options: string[]; sigil: string; tokenStart: number; cursorPos: number;
+  } | null>(null);
+  const [qaActiveIdx, setQaActiveIdx] = useState(-1);
+  const qaInputRef = useRef<HTMLInputElement>(null);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem("pinline.sidebar") === "collapsed"; }
     catch { return false; }
@@ -151,14 +156,21 @@ export default function App() {
   const isArchive = view === "archive";
   const isAll = view === "all";
 
-  // Unique dimension values for filter dropdowns (from all live pins)
   const livePins = useMemo(() => pins.filter((p) => p.status !== "done"), [pins]);
-  const dimOptions = useMemo(() => ({
+  // Dimension options for filter bar — live pins only
+  const liveDimOptions = useMemo(() => ({
     projects: unique(livePins.flatMap((p) => p.project ? [p.project] : [])),
     teams: unique(livePins.flatMap((p) => p.teams)),
     persons: unique(livePins.flatMap((p) => p.persons)),
     assets: unique(livePins.flatMap((p) => p.assets)),
   }), [livePins]);
+  // Dimension options for autocomplete — all pins so archived names are still suggested
+  const dimOptions = useMemo(() => ({
+    projects: unique(pins.flatMap((p) => p.project ? [p.project] : [])),
+    teams: unique(pins.flatMap((p) => p.teams)),
+    persons: unique(pins.flatMap((p) => p.persons)),
+    assets: unique(pins.flatMap((p) => p.assets)),
+  }), [pins]);
 
   const activeFilterCount = useMemo(
     () => Object.values(filters).filter(Boolean).length + (dimFilter ? 1 : 0),
@@ -202,6 +214,72 @@ export default function App() {
     [filtered, groupKind],
   );
   const agenda = useMemo(() => (isArchive ? [] : agendaEntries(filtered)), [filtered, isArchive]);
+
+  const SIGIL_TO_DIM: Record<string, keyof typeof dimOptions> = {
+    "#": "projects", "~": "teams", "@": "persons", "=": "assets",
+  };
+
+  function handleQaChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setText(val);
+    const cursor = e.target.selectionStart ?? val.length;
+    let tokenStart = -1;
+    let sigil = "";
+    for (let i = cursor - 1; i >= 0; i--) {
+      const ch = val[i];
+      if (ch === "#" || ch === "~" || ch === "@" || ch === "=") {
+        if (i === 0 || val[i - 1] === " ") { tokenStart = i; sigil = ch; }
+        break;
+      }
+      if (ch === " ") break;
+    }
+    if (tokenStart !== -1 && sigil in SIGIL_TO_DIM) {
+      const query = val.slice(tokenStart + 1, cursor);
+      const allOpts = dimOptions[SIGIL_TO_DIM[sigil]];
+      const filtered = allOpts
+        .filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 8);
+      if (filtered.length > 0) {
+        setQaDropdown({ options: filtered, sigil, tokenStart, cursorPos: cursor });
+        setQaActiveIdx(-1);
+        return;
+      }
+    }
+    setQaDropdown(null);
+    setQaActiveIdx(-1);
+  }
+
+  function handleQaKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!qaDropdown) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setQaActiveIdx((i) => Math.min(i + 1, qaDropdown.options.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setQaActiveIdx((i) => Math.max(i - 1, -1));
+    } else if (e.key === "Enter" && qaActiveIdx >= 0) {
+      e.preventDefault();
+      selectQaSuggestion(qaDropdown.options[qaActiveIdx]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setQaDropdown(null);
+      setQaActiveIdx(-1);
+    }
+  }
+
+  function selectQaSuggestion(selected: string) {
+    if (!qaDropdown) return;
+    const { sigil, tokenStart, cursorPos } = qaDropdown;
+    const newText = text.slice(0, tokenStart) + sigil + selected + " " + text.slice(cursorPos);
+    setText(newText);
+    setQaDropdown(null);
+    setQaActiveIdx(-1);
+    const newCursor = tokenStart + 1 + selected.length + 1;
+    requestAnimationFrame(() => {
+      const input = qaInputRef.current;
+      if (input) { input.focus(); input.setSelectionRange(newCursor, newCursor); }
+    });
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -368,12 +446,32 @@ export default function App() {
         </div>
 
         <form onSubmit={submit} className="quickadd">
-          <input
-            autoFocus
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="quick add…  %finding =asset #project ~team @person !high due:fri"
-          />
+          <div className="quickadd-wrap">
+            <input
+              ref={qaInputRef}
+              autoFocus
+              value={text}
+              onChange={handleQaChange}
+              onKeyDown={handleQaKeyDown}
+              onBlur={() => setTimeout(() => setQaDropdown(null), 150)}
+              placeholder="quick add…  %finding =asset #project ~team @person !high due:fri"
+            />
+            {qaDropdown && (
+              <ul className="suggest-drop" role="listbox">
+                {qaDropdown.options.map((opt, i) => (
+                  <li
+                    key={opt}
+                    role="option"
+                    aria-selected={i === qaActiveIdx}
+                    className={i === qaActiveIdx ? "suggest-item active" : "suggest-item"}
+                    onMouseDown={(e) => { e.preventDefault(); selectQaSuggestion(opt); }}
+                  >
+                    {qaDropdown.sigil}{opt}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <button type="submit">Pin it</button>
         </form>
 
@@ -404,10 +502,10 @@ export default function App() {
             {fsel("due", "Due", ["overdue", "today", "week", "none"])}
             {fsel("severity", "Severity", ["critical", "high", "medium", "low", "info"])}
             {fsel("remediation", "Remediation", REMEDIATION_STATES)}
-            {dimOptions.projects.length > 0 && fsel("project", "Project", dimOptions.projects)}
-            {dimOptions.teams.length > 0 && fsel("team", "Team", dimOptions.teams)}
-            {dimOptions.persons.length > 0 && fsel("person", "Person", dimOptions.persons)}
-            {dimOptions.assets.length > 0 && fsel("asset", "Asset", dimOptions.assets)}
+            {liveDimOptions.projects.length > 0 && fsel("project", "Project", liveDimOptions.projects)}
+            {liveDimOptions.teams.length > 0 && fsel("team", "Team", liveDimOptions.teams)}
+            {liveDimOptions.persons.length > 0 && fsel("person", "Person", liveDimOptions.persons)}
+            {liveDimOptions.assets.length > 0 && fsel("asset", "Asset", liveDimOptions.assets)}
           </div>
         )}
 
@@ -465,6 +563,7 @@ export default function App() {
           pin={editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); void load(); }}
+          dimOptions={dimOptions}
         />
       )}
     </div>

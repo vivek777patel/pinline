@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { SuggestInput } from "./SuggestInput.tsx";
 import {
   deletePin,
   updatePin,
@@ -19,7 +20,17 @@ const toDate = (iso: string | null): string => (iso ? new Date(iso).toISOString(
 const fromDate = (d: string): string | null => (d ? new Date(d).toISOString() : null);
 const csv = (s: string): string[] => s.split(",").map((x) => x.trim()).filter(Boolean);
 
-export function PinEditor({ pin, onClose, onSaved }: { pin: Pin; onClose: () => void; onSaved: () => void }) {
+export function PinEditor({
+  pin,
+  onClose,
+  onSaved,
+  dimOptions,
+}: {
+  pin: Pin;
+  onClose: () => void;
+  onSaved: () => void;
+  dimOptions: { projects: string[]; teams: string[]; persons: string[]; assets: string[] };
+}) {
   const [title, setTitle] = useState(pin.title);
   const [description, setDescription] = useState(pin.description ?? "");
   const [type, setType] = useState<PinType>(pin.type);
@@ -187,20 +198,20 @@ export function PinEditor({ pin, onClose, onSaved }: { pin: Pin; onClose: () => 
 
         <label className="field">
           <span>Project / Engagement / Initiative</span>
-          <input value={project} onChange={(e) => setProject(e.target.value)} placeholder="one project or engagement" />
+          <SuggestInput value={project} onChange={setProject} options={dimOptions.projects} placeholder="one project or engagement" />
         </label>
         <div className="field-row">
           <label className="field">
             <span>Teams</span>
-            <input value={teams} onChange={(e) => setTeams(e.target.value)} placeholder="platform, secops" />
+            <SuggestInput value={teams} onChange={setTeams} options={dimOptions.teams} multi placeholder="platform, secops" />
           </label>
           <label className="field">
             <span>People / Members</span>
-            <input value={persons} onChange={(e) => setPersons(e.target.value)} placeholder="priya, marcus" />
+            <SuggestInput value={persons} onChange={setPersons} options={dimOptions.persons} multi placeholder="priya, marcus" />
           </label>
           <label className="field">
             <span>Assets / Apps / Services</span>
-            <input value={assets} onChange={(e) => setAssets(e.target.value)} placeholder="comma, separated" />
+            <SuggestInput value={assets} onChange={setAssets} options={dimOptions.assets} multi placeholder="comma, separated" />
           </label>
         </div>
 

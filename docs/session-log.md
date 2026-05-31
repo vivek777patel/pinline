@@ -368,8 +368,7 @@ PINLINE_DB    default ./pinline.db
 - **GitHub Actions** — a CI workflow running `npm test` + `npm run e2e` on push.
 - **Editing dimensions as chips** — the editor currently uses comma-separated text
   fields with autocomplete; proper chip inputs with add/remove would be more polished.
-- **Snooze-until date on agenda** — snoozed Pins are invisible; a "snoozed" section
-  showing when they'll resurface could be useful.
+- ~~**Snooze-until date on agenda**~~ ✅ done — Snoozed sidebar view + card labels (section 11).
 - **Screenshots in README** — `docs/` folder with screenshots of the card grid,
   collapsed sidebar, editor, and agenda.
 - **GH_TOKEN** — the `GH_TOKEN` env var in `~/.zshrc` holds an invalid token. Replace
@@ -566,3 +565,49 @@ one asset, but "chase vendor" also started with `@priya` — four total dims, on
 Fix: removed `@priya` from the "chase vendor" quick-add line. `@priya` was not asserted
 anywhere downstream in the suite. After the edit the pin has exactly 3 chips
 (~platform + ~secops + =db-prod), all visible. All 14 e2e checks pass.
+
+---
+
+## 11. Nudge/snooze visibility + Snoozed view (2026-05-31 continued)
+
+### Problem: nudge and snooze dates invisible on cards
+
+`due` had a visible label on the card face ("due in 2d", "3d overdue"). `nudge` and
+`snooze` had no card-face representation — the only way to see them was to open each
+editor, or for nudge, wait for the next-7-days agenda strip to show it (within 7 days
+only). There was no way to see snoozed pins at all once they disappeared.
+
+### Nudge label on card
+
+Added `nudgeLabel(date)` function and a green `nudge-tag` span in the card meta row,
+parallel to the existing `due` label:
+
+- `nudge in Nd` — upcoming chase reminder
+- `nudge today` — chase is due today
+- `nudge tomorrow`
+- `nudge Nd ago` — past nudge, rendered muted (`.nudge-tag.past` → `var(--muted)`)
+
+Green colour matches the nudge dot already used in the agenda key.
+
+### Snoozed sidebar view
+
+Added a **⏸ Snoozed** entry at the bottom of the sidebar nav.
+
+**Data:** `load()` now fires two parallel fetches — `GET /api/pins` (live, priority-sorted,
+for all existing views) and `GET /api/pins?all=true` (raw, includes snoozed). The second
+is filtered client-side: `snooze > now && status !== "done"`. Stored in a separate
+`snoozedPins` state so live views are unaffected.
+
+**View behaviour:**
+- `filtered` short-circuits to `snoozedPins` sorted by `snooze` ascending (resurfaces soonest first)
+- Agenda strip suppressed (`isSnoozedView` added to the `isArchive || ...` guard)
+- Sidebar badge (violet) shows `snoozedPins.length`
+
+**Card label:** a violet `snooze-tag` span shows `resurfaces in Nd` / `resurfaces today` /
+`resurfaces tomorrow` on any card whose `snooze > now`. Since snoozed pins are hidden from
+live views, this label is effectively only visible in the Snoozed view.
+
+**Bug fixed immediately:** initial version included done pins (status `"done"`) with future
+snooze dates. Fixed by adding `&& status !== "done"` to the client-side filter in `load()`.
+
+Crossed off the "Snooze-until date on agenda" open item from section 7.

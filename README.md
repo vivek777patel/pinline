@@ -128,6 +128,14 @@ Every card carries two independent colour signals:
 
 A **colour legend strip** above the grid explains both. The agenda header has a **due/nudge key** (amber = due date, green = nudge/chase).
 
+Cards also show inline date labels in the meta row:
+
+| Label | Colour | Meaning |
+|---|---|---|
+| `due in Nd` / `Nd overdue` | amber / red | deadline approaching or passed |
+| `nudge in Nd` / `nudge today` / `nudge Nd ago` | green / muted | chase reminder upcoming or past |
+| `resurfaces in Nd` / `resurfaces today` | violet | pin is snoozed, visible only in the Snoozed view |
+
 ## Views (sidebar menu)
 
 The sidebar is **collapsible** (`«` / `»` button, state persists in localStorage). Each item is a lens over the same prioritized list:
@@ -139,6 +147,7 @@ The sidebar is **collapsible** (`«` / `»` button, state persists in localStora
 - **Members** — grouped by person/member.
 - **Assets / Apps / Services** — grouped by asset/app/service. Shows everything affecting a given system.
 - **Archive** — Done Pins, sorted newest-first.
+- **⏸ Snoozed** — Pins currently hidden by a future snooze date, sorted by when they resurface (soonest first). Badge on the sidebar item shows the count. Done pins are excluded.
 
 Click any **chip** on a card to filter the current view to that value. Cards with more than 3 dimension chips show a **+N more** pill — click it to open the editor and see all. The **next-7-days agenda** strip surfaces upcoming due/nudge dates — click a card to open the editor.
 

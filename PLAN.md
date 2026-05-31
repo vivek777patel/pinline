@@ -120,6 +120,8 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
 - **`npm run dev`** — single command launching both `dev:api` and `dev:web` in parallel via `concurrently`. API output in cyan, Vite in magenta.
 - **Bulk CSV import** (`web/src/ImportModal.tsx`) — ⬆ button next to quick-add opens an import modal. Client-side CSV parsing, fixed column schema, preview table with per-row validation (valid/invalid highlighted), skip-bad-rows error handling, `POST /api/pins/bulk` batch endpoint. Includes a **⬇ template CSV** download (header + 2 example rows).
 - **CSV export** — ⬇ button exports the currently filtered/viewed pins as a CSV. Filename reflects the active view. All 15 schema columns included; multi-value dims pipe-joined. Export schema matches import schema for round-trip editing.
+- **Nudge label on card** — green `nudge in Nd` / `nudge today` / `nudge Nd ago` label shown in the card meta row whenever a nudge date is set. Past nudges render muted. Eliminates having to open each card to know when a chase reminder is due.
+- **Snoozed view** (⏸ sidebar) — dedicated view showing all currently-snoozed non-done Pins sorted by resurface date. Violet `resurfaces in Nd` label on each card. Violet count badge on the sidebar item. Fetched via `GET /api/pins?all=true` filtered client-side (`snooze > now && status !== "done"`). No agenda strip in this view.
 
 ## Running it
 

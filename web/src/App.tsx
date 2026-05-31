@@ -187,7 +187,7 @@ export default function App() {
 
   function renderPin(p: Pin): ReactNode {
     return (
-      <li key={p.id} className={`pin imp-${p.importance}${p.status === "done" ? " done" : ""}`}>
+      <li key={p.id} className={`pin imp-${p.importance} type-card-${p.type}${p.status === "done" ? " done" : ""}`}>
         <span className="band" aria-hidden />
         <div className="body">
           <button type="button" className="title" onClick={() => setEditing(p)} title="Edit pin">

@@ -423,9 +423,10 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 16px 14px;
+  padding: 16px 16px 14px 18px;
   background: var(--glass);
   border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--line-soft);
   border-radius: 14px;
   overflow: hidden;
   backdrop-filter: blur(10px);
@@ -435,6 +436,20 @@ h1 {
   transform: translateY(-2px);
   border-color: var(--line);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 22px rgba(0, 234, 255, 0.08);
+}
+
+/* left border = type; top band = importance — two signals, no conflict */
+.type-card-finding {
+  border-left-color: #ff2bd6;
+  box-shadow: inset 3px 0 12px rgba(255, 43, 214, 0.1);
+}
+.type-card-task {
+  border-left-color: #9b5cff;
+  box-shadow: inset 3px 0 12px rgba(155, 92, 255, 0.1);
+}
+.type-card-followup {
+  border-left-color: #2bff9e;
+  box-shadow: inset 3px 0 12px rgba(43, 255, 158, 0.1);
 }
 .pin .band {
   position: absolute;

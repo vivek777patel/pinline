@@ -117,10 +117,14 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
 - **Card chip overflow** — cards with more than 3 dimension chips show the first 3 then a muted `+N more` pill that opens the editor. Keeps card heights uniform regardless of how many people/teams/assets a Pin has.
 - **Thumbtack logo + favicon** — sidebar logo and browser-tab favicon use an SVG pushpin/thumbtack icon (`web/public/favicon.svg`), replacing the earlier map-marker shape.
 - **DB query optimisation** — `listPins()` replaced the N+1 pattern (4N+1 queries for N pins) with a single `LEFT JOIN + GROUP_CONCAT` query. Also added `idx_pins_created` index and 8 MB `cache_size` pragma. See `docs/session-log.md` section 9.
+- **`npm run dev`** — single command launching both `dev:api` and `dev:web` in parallel via `concurrently`. API output in cyan, Vite in magenta.
+- **Bulk CSV import** (`web/src/ImportModal.tsx`) — ⬆ button next to quick-add opens an import modal. Client-side CSV parsing, fixed column schema, preview table with per-row validation (valid/invalid highlighted), skip-bad-rows error handling, `POST /api/pins/bulk` batch endpoint. Includes a **⬇ template CSV** download (header + 2 example rows).
+- **CSV export** — ⬇ button exports the currently filtered/viewed pins as a CSV. Filename reflects the active view. All 15 schema columns included; multi-value dims pipe-joined. Export schema matches import schema for round-trip editing.
 
 ## Running it
 
 - One process: `npm run build:web && npm start` → http://localhost:4000
+- Dev (both servers): `npm run dev` → API on :4000 (cyan) + Vite on :5173 (magenta)
 - Dev (backend auto-reload): `npm run dev:api` (serves the last `build:web` output)
 - Dev (frontend hot-reload): `npm run dev:web` → http://localhost:5173 (proxies `/api`)
 
@@ -132,12 +136,16 @@ prioritized Pin list. Within every view, Pins sort by Importance band → Urgenc
   editor incl. comma-separated dimensions, remediation, archive, collapsible sidebar).
 - **Types:** `npm run typecheck` (API) and `npm run typecheck:web` (frontend).
 
+> **Note:** the e2e suite was updated to account for the 3-chip overflow cap — the "chase vendor"
+> quick-add no longer includes `@priya` so the editor's two teams + one asset stay within 3
+> visible chips and the assertion holds.
+
 ## File map
 
 ```
 src/            db.ts (schema/migrate) · pin.ts (model + CRUD) · priority.ts (urgency/sort)
                 quickadd.ts (parser) · server.ts (REST + static) · index.ts (entry)
-web/src/        App.tsx (shell + views) · PinEditor.tsx · SuggestInput.tsx · api.ts · styles.css
+web/src/        App.tsx (shell + views) · PinEditor.tsx · ImportModal.tsx · SuggestInput.tsx · api.ts · styles.css
 web/public/     favicon.svg (pushpin icon)
 test/           *.test.ts (node:test) · e2e.mjs (Playwright)
 docs/adr/       0001 priority model · 0002 SQLite-file storage

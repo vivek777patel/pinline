@@ -363,8 +363,8 @@ PINLINE_DB    default ./pinline.db
 
 ## 7. What's still open / natural next steps
 
-- **`npm run dev`** — a single command that runs both `dev:api` and `dev:web` in
-  parallel (e.g. with `concurrently`).
+- ~~**`npm run dev`**~~ ✅ done (section 10)
+- ~~**Bulk CSV import / export**~~ ✅ done (section 10)
 - **GitHub Actions** — a CI workflow running `npm test` + `npm run e2e` on push.
 - **Editing dimensions as chips** — the editor currently uses comma-separated text
   fields with autocomplete; proper chip inputs with add/remove would be more polished.
@@ -375,8 +375,8 @@ PINLINE_DB    default ./pinline.db
 - **GH_TOKEN** — the `GH_TOKEN` env var in `~/.zshrc` holds an invalid token. Replace
   with a valid PAT (repo scope) or use `unset GH_TOKEN && gh auth login` to store
   credentials in the macOS Keychain instead of a dotfile.
-- **Filter bar on other views** — currently only the All view has the full filter bar;
-  the Findings view could benefit from severity/remediation filters.
+- **Filter bar on Findings view** — currently only the All view has the full filter bar;
+  severity/remediation filters would be useful in the Findings view.
 - **e2e coverage for filter bar** — the Playwright suite doesn't yet cover the new
   filter bar interactions.
 
@@ -493,3 +493,76 @@ result. `project_id` is destructured out (matching `assemble()`'s behaviour) and
 
 All 31 unit tests pass unchanged, including `update.test.ts` which asserts sorted
 dimension arrays (`["appsec", "secops"]`).
+
+---
+
+## 10. `npm run dev`, bulk import/export, e2e fix (2026-05-31 continued)
+
+### `npm run dev` — single dev command
+
+Added `concurrently` as a dev dependency. The new `npm run dev` script runs both
+`dev:api` and `dev:web` in a single terminal, with API output prefixed and coloured
+cyan, Vite output magenta. Removes the need to open two terminals during development.
+
+Crossed off the open item from section 7.
+
+### CSV bulk import
+
+**Design (grilling session):** walked through every design branch before writing code:
+- **Source:** tool export / spreadsheet (not hand-authored quick-add lines)
+- **Format:** fixed column schema (not a dynamic mapping UI — simpler, matches Pin fields 1:1)
+- **Parsing:** client-side in the browser (instant preview without server round-trip)
+- **Multi-value separator:** `|` pipe within a CSV cell (avoids conflict with CSV commas)
+- **Error handling:** skip bad rows, import the rest, report skipped rows with reason
+- **Deduplication:** none — always create (predictable, no silent skips)
+- **UI:** ⬆ button next to the quick-add bar → modal with preview before confirming
+
+**Implementation:**
+
+New file `web/src/ImportModal.tsx` — four states:
+1. **idle** — schema hint, dropzone (click or drag-and-drop), template download button
+2. **preview** — parsed rows table (valid rows normal, invalid rows red with reason), row count summary, "Import N pins" confirm button
+3. **importing** — spinner / "Importing…"
+4. **done** — "✓ N pins created" + any server-side skip list, Done button
+
+Client-side CSV parser (~40 lines) handles quoted fields (RFC 4180 `""` escaping), CRLF and LF line endings, blank-row skipping, and whitespace trimming. No new npm dependency.
+
+Row → `CreatePinInput` mapper:
+- Header row required, column names case-insensitive
+- Multi-value fields (`teams`, `persons`, `assets`) split on `|`
+- `type` auto-set to `finding` when `severity` is provided and no explicit type
+- All enum values validated; invalid rows flagged and skipped (not aborted)
+
+New backend route: `POST /api/pins/bulk` in `src/server.ts`. Accepts `{ rows: CreatePinInput[] }`, loops `createPin()` per row with per-row error capture, returns `{ created: Pin[], errors: { row, message }[] }`. No new DB schema changes — `createPin()` already resolves dimensions on demand.
+
+`web/src/api.ts` additions:
+- `CreatePinInput` interface (mirrors `src/pin.ts`)
+- `BulkImportResult` interface
+- `bulkImport(rows)` fetch helper → `POST /api/pins/bulk`
+
+### Import template download
+
+Inside the import modal (idle state), a **⬇ template CSV** button downloads `pinline-template.csv` — the full 15-column header row plus two example rows (one finding, one task). Implemented as a `downloadTemplate()` function using `Blob` + `URL.createObjectURL` + ephemeral `<a>` click.
+
+### CSV export
+
+A **⬇ (green)** button added to the right of the ⬆ import button in the quick-add bar. Clicking it:
+1. Takes the `filtered` pins already in component state (same set visible in the current view)
+2. Serializes them to CSV using a `csvCell()` escape function (handles commas, quotes, newlines per RFC 4180)
+3. Triggers a browser download via `Blob` + `URL.createObjectURL`
+4. Names the file `pinline-{viewLabel}-export.csv` (e.g. `pinline-findings-export.csv`)
+
+All 15 import columns are included in the export. Multi-value dims are `|`-joined. The export → edit → re-import round-trip works without field mismatch.
+
+`reference` field added to the frontend `Pin` interface in `api.ts` — it was present in the API response from `assemble()` but missing from the TypeScript type.
+
+### e2e test fix (chip overflow regression)
+
+The e2e test at line 91 of `test/e2e.mjs` was asserting that `=db-prod` appeared as a
+visible chip on the "chase vendor" card after an editor save. The test added two teams +
+one asset, but "chase vendor" also started with `@priya` — four total dims, one over the
+3-chip cap, so `=db-prod` landed in the `+1 more` overflow pill instead.
+
+Fix: removed `@priya` from the "chase vendor" quick-add line. `@priya` was not asserted
+anywhere downstream in the suite. After the edit the pin has exactly 3 chips
+(~platform + ~secops + =db-prod), all visible. All 14 e2e checks pass.

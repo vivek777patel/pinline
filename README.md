@@ -30,6 +30,7 @@ Open **http://localhost:4000** and type into the quick-add bar.
 
 | Command | What it does |
 |---|---|
+| `npm run dev` | **Both servers at once** — API (cyan) + Vite hot-reload (magenta) via concurrently |
 | `npm run dev:api` | API server with auto-reload on backend changes (serves the last `build:web`) |
 | `npm run dev:web` | Vite dev server with hot-reload → http://localhost:5173 (proxies `/api` to :4000) |
 | `npm run build:web` | Production build of the frontend into `web/dist` |
@@ -141,6 +142,31 @@ The sidebar is **collapsible** (`«` / `»` button, state persists in localStora
 
 Click any **chip** on a card to filter the current view to that value. Cards with more than 3 dimension chips show a **+N more** pill — click it to open the editor and see all. The **next-7-days agenda** strip surfaces upcoming due/nudge dates — click a card to open the editor.
 
+## Bulk import / export
+
+Two buttons live to the right of the quick-add bar:
+
+- **⬆ (violet)** — **Import CSV**: upload a spreadsheet or tool export and create many pins at once. A preview table shows which rows will be created and highlights any invalid rows (skipped, not aborted). Inside the modal, **⬇ template CSV** downloads a pre-filled header + example rows so you have the exact column format ready to fill in.
+- **⬇ (green)** — **Export CSV**: downloads the currently visible, filtered pins as a CSV. The filename reflects the active view (`pinline-findings-export.csv`, `pinline-all-export.csv`, etc.). Columns match the import schema exactly, so export → edit → re-import works cleanly.
+
+### Import CSV schema
+
+Header row required, column names case-insensitive.
+
+| Column | Required | Values | Notes |
+|---|---|---|---|
+| `title` | **yes** | free text | |
+| `type` | no | `task` / `followup` / `finding` | default `task`; auto `finding` if `severity` set |
+| `importance` | no | `critical` / `high` / `medium` / `low` | default derived from severity or `medium` |
+| `status` | no | `open` / `in_progress` / `blocked` / `done` | default `open` |
+| `description` | no | free text | |
+| `due` / `nudge` / `snooze` | no | `YYYY-MM-DD` | |
+| `severity` | no | `critical` / `high` / `medium` / `low` / `info` | finding-only |
+| `remediation_state` | no | `triaged` / `in_remediation` / `remediated` / `verified` / `accepted_risk` / `false_positive` | finding-only |
+| `reference` | no | URL or ID string | |
+| `project` | no | name (created on demand) | single value |
+| `teams` / `persons` / `assets` | no | pipe-separated e.g. `red\|appsec` | |
+
 ## Editing
 
 Click a Pin's **title** (or an **agenda card**) to open the editor. Every field is
@@ -160,6 +186,7 @@ All under `/api`. Pins return their dimension **names** and a computed `urgency`
 | `GET` | `/api/pins` | Live + snooze-filtered, priority-sorted (`?all=true` for raw) |
 | `POST` | `/api/pins` | Create from a JSON body |
 | `POST` | `/api/pins/quick` | Create by parsing `{ "text": "<quick-add line>" }` |
+| `POST` | `/api/pins/bulk` | Bulk-create from `{ "rows": [CreatePinInput, …] }`; returns `{ created, errors }` |
 | `GET` | `/api/pins/:id` | One Pin |
 | `PATCH` | `/api/pins/:id` | Update any field (dimension arrays replace that dimension) |
 | `DELETE` | `/api/pins/:id` | Delete (cascades dimension links) |
@@ -189,8 +216,9 @@ src/
   server.ts      REST routes + static frontend
   index.ts       entry point
 web/src/
-  App.tsx          app shell, sidebar views, card grid, agenda
+  App.tsx          app shell, sidebar views, card grid, agenda, export
   PinEditor.tsx    the edit modal
+  ImportModal.tsx  CSV import modal (parse → preview → bulk create)
   SuggestInput.tsx reusable autocomplete input component
   api.ts           typed fetch helpers
   styles.css       the theme

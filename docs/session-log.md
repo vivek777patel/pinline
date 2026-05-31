@@ -1,7 +1,7 @@
 # Pinline — Session Log
 
 Full record of the design + build session that produced this project.
-Date: 2026-05-29.
+Started: 2026-05-29. Continued: 2026-05-30.
 
 ---
 
@@ -201,7 +201,81 @@ ships it built-in — zero native build steps, same on-disk format, same sync AP
 
 ---
 
+## 3b. Further post-plan changes (2026-05-30 session)
+
+### Description field
+- Added a free-text `description` field to Pins — DB column (`ALTER TABLE` back-fill
+  migration), model, API, and a resizable textarea in the editor modal.
+- **Not shown on cards** — description is only visible when the editor is open (Vivek's
+  explicit preference: keep cards clean).
+- Saves as `null` when empty so no orphan empty element is rendered.
+
+### Editor field labels clarified
+Renamed labels in `PinEditor.tsx` to make the purpose of each dimension obvious:
+- Project → **Project / Engagement / Initiative**
+- People → **People / Members**
+- Assets → **Assets / Apps / Services**
+
+Same rename applied to the sidebar menu:
+- Projects → **Projects / Engagements**
+- Assets → **Assets / Apps / Services**
+
+### Type-colour coding on cards
+Two independent visual signals per card:
+- **Top bar** = importance (critical red glow, high amber, medium cyan, low gray)
+- **Left border** = type (finding = magenta, task = violet, followup = green)
+
+Implemented via `.type-card-{type}` CSS classes on each `<li>` and a `.type-task` text
+colour rule (the missing rule was the bug — task label was falling back to muted gray).
+
+### Filter bar in the All view
+A full filter bar appears only in the **All** view, below the quick-add input.
+Filters available: **Type, Importance, Status, Due, Severity, Remediation, Project,
+Team, Person, Asset**.
+
+- Dimension dropdowns (Project/Team/Person/Asset) are populated dynamically from the
+  actual live Pins — only values that exist appear as options.
+- Active filters glow cyan; the **clear N filters** pill removes all at once.
+- Due filter has four options: overdue / today / this week / no date.
+- Filters reset automatically when switching to another view.
+- Chip-clicks still work alongside the filter bar (they stack).
+
+### GitHub push
+Project pushed to a private GitHub repo: https://github.com/vivek777patel/pinline
+via SSH (`git@github.com:vivek777patel/pinline.git`). `GH_TOKEN` in `~/.zshrc` is
+still invalid — `gh` CLI commands fail, but `git push` over SSH works fine.
+
+### Session memory saved
+Seven memory files written to the Claude project memory store covering: user profile,
+project state, domain model, architecture gotchas, quick-add grammar, workflow
+preferences, and the GH_TOKEN situation.
+
+---
+
 ## 4. Bugs found and fixed during the session
+
+### Browser cache serving stale JS bundle
+**Symptom:** UI changes (label renames, type colours) appeared correct in the built
+bundle but Vivek still saw old text in the browser.
+
+**Root cause:** browser aggressively caches the JS bundle filename. Even after
+`npm run build:web` produces a new filename-hashed bundle, the browser serves the old
+one from cache.
+
+**Fix:** hard refresh (`Cmd+Shift+R`) or open in an incognito window. Confirmed by
+`grep`-ing the new label text in the dist bundle to prove the server was serving the
+right file — proving it was a client cache issue, not a server issue.
+
+**Prevention:** always mention hard refresh / incognito after any frontend change.
+
+### Missing `.type-task` CSS rule
+**Symptom:** the `TASK` label on cards was muted gray, not violet — even though the
+left border was correctly violet.
+
+**Root cause:** `.type-finding` and `.type-followup` colour rules existed but
+`.type-task` was never added, so it fell back to the base `.type` colour (muted gray).
+
+**Fix:** added `.type-task { color: var(--violet); }` to `styles.css`.
 
 ### Stale server serving old `updatePin` code
 **Symptom:** editing Teams/Assets/People in the modal appeared to save (no error) but
@@ -303,3 +377,7 @@ PINLINE_DB    default ./pinline.db
 - **GH_TOKEN** — the `GH_TOKEN` env var in `~/.zshrc` holds an invalid token. Replace
   with a valid PAT (repo scope) or use `unset GH_TOKEN && gh auth login` to store
   credentials in the macOS Keychain instead of a dotfile.
+- **Filter bar on other views** — currently only the All view has the full filter bar;
+  the Findings view could benefit from severity/remediation filters.
+- **e2e coverage for filter bar** — the Playwright suite doesn't yet cover the new
+  filter bar interactions.

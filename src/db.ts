@@ -5,6 +5,7 @@ export function openDb(path: string = process.env.PINLINE_DB ?? "pinline.db"): D
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
+  db.exec("PRAGMA cache_size = -8000;");
   migrate(db);
   return db;
 }
@@ -49,6 +50,8 @@ function migrate(db: DatabaseSync): void {
       asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
       PRIMARY KEY (pin_id, asset_id)
     );
+
+    CREATE INDEX IF NOT EXISTS idx_pins_created ON pins(created DESC);
   `);
 
   // Back-fill columns added after the initial schema.

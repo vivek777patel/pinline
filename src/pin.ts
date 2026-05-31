@@ -56,6 +56,13 @@ interface PinRow {
   project_id: string | null;
 }
 
+interface PinListRow extends PinRow {
+  project_name: string | null;
+  teams_csv:    string | null;
+  persons_csv:  string | null;
+  assets_csv:   string | null;
+}
+
 export interface CreatePinInput {
   title: string;
   type?: PinType;
@@ -181,6 +188,38 @@ function writeRow(db: DatabaseSync, row: PinRow): void {
   db.prepare(`UPDATE pins SET ${setClause} WHERE id = ?`).run(...UPDATABLE.map((c) => row[c]), row.id);
 }
 
+function listPinsRaw(db: DatabaseSync): Pin[] {
+  const rows = db.prepare(`
+    SELECT
+      p.*,
+      pr.name                        AS project_name,
+      GROUP_CONCAT(DISTINCT t.name)  AS teams_csv,
+      GROUP_CONCAT(DISTINCT pe.name) AS persons_csv,
+      GROUP_CONCAT(DISTINCT a.name)  AS assets_csv
+    FROM pins p
+    LEFT JOIN projects   pr ON pr.id     = p.project_id
+    LEFT JOIN pin_teams  pt ON pt.pin_id = p.id
+    LEFT JOIN teams       t ON t.id      = pt.team_id
+    LEFT JOIN pin_persons pp ON pp.pin_id = p.id
+    LEFT JOIN persons    pe  ON pe.id    = pp.person_id
+    LEFT JOIN pin_assets pa  ON pa.pin_id = p.id
+    LEFT JOIN assets      a  ON a.id     = pa.asset_id
+    GROUP BY p.id
+    ORDER BY p.created DESC
+  `).all() as unknown as PinListRow[];
+
+  return rows.map((r) => {
+    const { project_id, project_name, teams_csv, persons_csv, assets_csv, ...scalar } = r;
+    return {
+      ...scalar,
+      project:  project_name ?? null,
+      teams:    teams_csv   ? teams_csv.split(",").sort()   : [],
+      persons:  persons_csv ? persons_csv.split(",").sort() : [],
+      assets:   assets_csv  ? assets_csv.split(",").sort()  : [],
+    };
+  });
+}
+
 // --- public API ---
 
 export function createPin(db: DatabaseSync, input: CreatePinInput): Pin {
@@ -219,8 +258,7 @@ export function getPin(db: DatabaseSync, id: string): Pin | undefined {
 }
 
 export function listPins(db: DatabaseSync): Pin[] {
-  const rows = db.prepare("SELECT * FROM pins ORDER BY created DESC").all() as unknown as PinRow[];
-  return rows.map((row) => assemble(db, row));
+  return listPinsRaw(db);
 }
 
 export function updatePin(db: DatabaseSync, id: string, patch: UpdatePinInput): Pin | undefined {

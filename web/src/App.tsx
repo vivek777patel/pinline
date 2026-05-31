@@ -68,6 +68,14 @@ function dueLabel(due: string): string {
   return `due in ${days}d`;
 }
 
+function nudgeLabel(nudge: string): string {
+  const days = Math.round((new Date(nudge).getTime() - Date.now()) / 86_400_000);
+  if (days < 0) return `nudge ${-days}d ago`;
+  if (days === 0) return "nudge today";
+  if (days === 1) return "nudge tomorrow";
+  return `nudge in ${days}d`;
+}
+
 function whenLabel(date: string): string {
   const days = Math.round((new Date(date).getTime() - Date.now()) / 86_400_000);
   if (days <= 0) return "today";
@@ -354,6 +362,11 @@ export default function App() {
             {p.due && (
               <span className={dueLabel(p.due).includes("overdue") ? "due overdue" : "due"}>
                 {dueLabel(p.due)}
+              </span>
+            )}
+            {p.nudge && (
+              <span className={nudgeLabel(p.nudge).includes("ago") ? "nudge-tag past" : "nudge-tag"}>
+                {nudgeLabel(p.nudge)}
               </span>
             )}
             {typeof p.urgency === "number" && p.urgency > 0 && <span className="urg">⚡{p.urgency}</span>}

@@ -746,6 +746,14 @@ h1 {
   color: #ff6f8b;
   font-weight: 600;
 }
+.nudge-tag {
+  color: var(--green);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.nudge-tag.past {
+  color: var(--muted);
+}
 .urg {
   color: var(--high);
 }

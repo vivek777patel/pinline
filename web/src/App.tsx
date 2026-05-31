@@ -193,7 +193,7 @@ export default function App() {
       const [live, all] = await Promise.all([fetchPins(), fetchAllPins()]);
       const now = new Date();
       setPins(live);
-      setSnoozedPins(all.filter((p) => p.snooze && new Date(p.snooze) > now));
+      setSnoozedPins(all.filter((p) => p.snooze && new Date(p.snooze) > now && p.status !== "done"));
       setError(null);
     } catch (e) { setError((e as Error).message); }
   }

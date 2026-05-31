@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.ts",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "node --watch src/index.ts",
     "dev:web": "vite",
     "build:web": "vite build",
@@ -24,6 +25,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^10.0.0",
     "playwright": "^1.60.0",
     "typescript": "^5.7.0",
     "vite": "^7.0.0"

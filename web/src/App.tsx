@@ -205,9 +205,6 @@ export default function App() {
             )}
             {typeof p.urgency === "number" && p.urgency > 0 && <span className="urg">⚡{p.urgency}</span>}
           </span>
-          {p.description && (
-            <span className="description">{p.description}</span>
-          )}
           {(p.project !== null || p.teams.length > 0 || p.persons.length > 0 || p.assets.length > 0) && (
             <span className="chips">
               {p.project && chip("project", p.project)}

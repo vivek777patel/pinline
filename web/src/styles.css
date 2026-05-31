@@ -517,6 +517,9 @@ h1 {
 .type-finding {
   color: var(--magenta);
 }
+.type-task {
+  color: var(--violet);
+}
 .type-followup {
   color: var(--green);
 }

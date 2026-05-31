@@ -78,6 +78,10 @@ export async function fetchPins(): Promise<Pin[]> {
   return (await unwrap(await fetch("/api/pins"))) as Pin[];
 }
 
+export async function fetchAllPins(): Promise<Pin[]> {
+  return (await unwrap(await fetch("/api/pins?all=true"))) as Pin[];
+}
+
 export async function quickAdd(text: string): Promise<void> {
   await unwrap(
     await fetch("/api/pins/quick", {

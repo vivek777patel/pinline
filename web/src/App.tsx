@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   fetchPins,
+  fetchAllPins,
   quickAdd,
   setRemediation,
   setStatus,
@@ -17,7 +18,7 @@ import { PinEditor } from "./PinEditor.tsx";
 import { ImportModal } from "./ImportModal.tsx";
 
 type DimKind = "project" | "team" | "person" | "asset";
-type View = "all" | "findings" | "project" | "team" | "person" | "asset" | "archive";
+type View = "all" | "findings" | "project" | "team" | "person" | "asset" | "archive" | "snoozed";
 
 interface Filters {
   type: PinType | "";
@@ -54,6 +55,7 @@ const VIEWS: { id: View; label: string; icon: string }[] = [
   { id: "person", label: "Members", icon: "◐" },
   { id: "asset", label: "Assets / Apps / Services", icon: "⌬" },
   { id: "archive", label: "Archive", icon: "✓" },
+  { id: "snoozed", label: "Snoozed", icon: "⏸" },
 ];
 
 const GROUPED: Record<string, DimKind | undefined> = {
@@ -74,6 +76,13 @@ function nudgeLabel(nudge: string): string {
   if (days === 0) return "nudge today";
   if (days === 1) return "nudge tomorrow";
   return `nudge in ${days}d`;
+}
+
+function snoozeLabel(snooze: string): string {
+  const days = Math.round((new Date(snooze).getTime() - Date.now()) / 86_400_000);
+  if (days <= 0) return "resurfaces today";
+  if (days === 1) return "resurfaces tomorrow";
+  return `resurfaces in ${days}d`;
 }
 
 function whenLabel(date: string): string {
@@ -156,6 +165,7 @@ function exportPins(pins: Pin[], filename: string) {
 
 export default function App() {
   const [pins, setPins] = useState<Pin[]>([]);
+  const [snoozedPins, setSnoozedPins] = useState<Pin[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("all");
@@ -179,8 +189,13 @@ export default function App() {
   }, [collapsed]);
 
   async function load() {
-    try { setPins(await fetchPins()); setError(null); }
-    catch (e) { setError((e as Error).message); }
+    try {
+      const [live, all] = await Promise.all([fetchPins(), fetchAllPins()]);
+      const now = new Date();
+      setPins(live);
+      setSnoozedPins(all.filter((p) => p.snooze && new Date(p.snooze) > now));
+      setError(null);
+    } catch (e) { setError((e as Error).message); }
   }
   useEffect(() => { void load(); }, []);
 
@@ -188,6 +203,7 @@ export default function App() {
   const findingCount = pins.filter((p) => p.status !== "done" && p.type === "finding").length;
   const isArchive = view === "archive";
   const isAll = view === "all";
+  const isSnoozedView = view === "snoozed";
 
   const livePins = useMemo(() => pins.filter((p) => p.status !== "done"), [pins]);
   // Dimension options for filter bar — live pins only
@@ -220,6 +236,9 @@ export default function App() {
   }
 
   const filtered = useMemo(() => {
+    if (isSnoozedView) {
+      return [...snoozedPins].sort((a, b) => (a.snooze ?? "").localeCompare(b.snooze ?? ""));
+    }
     let rows = pins.filter((p) => (isArchive ? p.status === "done" : p.status !== "done"));
     if (view === "findings") rows = rows.filter((p) => p.type === "finding");
     if (dimFilter) rows = rows.filter((p) => DIM_OF[dimFilter.kind](p).includes(dimFilter.value));
@@ -239,14 +258,14 @@ export default function App() {
 
     if (isArchive) rows = [...rows].sort((a, b) => (b.closed ?? "").localeCompare(a.closed ?? ""));
     return rows;
-  }, [pins, view, dimFilter, filters, isArchive, isAll]);
+  }, [pins, snoozedPins, view, dimFilter, filters, isArchive, isAll, isSnoozedView]);
 
   const groupKind = GROUPED[view];
   const sections = useMemo(
     () => (groupKind ? groupBy(filtered, groupKind) : [{ key: "", pins: filtered }]),
     [filtered, groupKind],
   );
-  const agenda = useMemo(() => (isArchive ? [] : agendaEntries(filtered)), [filtered, isArchive]);
+  const agenda = useMemo(() => (isArchive || isSnoozedView ? [] : agendaEntries(filtered)), [filtered, isArchive, isSnoozedView]);
 
   const SIGIL_TO_DIM: Record<string, keyof typeof dimOptions> = {
     "#": "projects", "~": "teams", "@": "persons", "=": "assets",
@@ -369,6 +388,9 @@ export default function App() {
                 {nudgeLabel(p.nudge)}
               </span>
             )}
+            {p.snooze && new Date(p.snooze) > new Date() && (
+              <span className="snooze-tag">{snoozeLabel(p.snooze)}</span>
+            )}
             {typeof p.urgency === "number" && p.urgency > 0 && <span className="urg">⚡{p.urgency}</span>}
             {p.type === "finding" && (
               <select
@@ -473,6 +495,7 @@ export default function App() {
               <span className="menu-icon" aria-hidden>{v.icon}</span>
               <span className="menu-label">{v.label}</span>
               {v.id === "findings" && findingCount > 0 && <span className="badge">{findingCount}</span>}
+              {v.id === "snoozed" && snoozedPins.length > 0 && <span className="badge badge-snooze">{snoozedPins.length}</span>}
             </button>
           ))}
         </nav>

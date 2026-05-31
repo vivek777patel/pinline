@@ -754,6 +754,16 @@ h1 {
 .nudge-tag.past {
   color: var(--muted);
 }
+.snooze-tag {
+  color: var(--violet);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.badge-snooze {
+  color: var(--violet) !important;
+  background: rgba(155, 92, 255, 0.16) !important;
+  border-color: rgba(155, 92, 255, 0.3) !important;
+}
 .urg {
   color: var(--high);
 }

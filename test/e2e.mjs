@@ -67,7 +67,7 @@ try {
   ok("agenda strip shows the upcoming due date");
 
   // second pin (followup with a nudge)
-  await page.fill(".quickadd input", "chase vendor %fu @priya nudge:3d !low");
+  await page.fill(".quickadd input", "chase vendor %fu nudge:3d !low");
   await page.click(".quickadd button");
   await pinCount(2);
   assert.equal(await page.locator(".agenda-item", { hasText: "chase vendor" }).count(), 1, "nudge in agenda");

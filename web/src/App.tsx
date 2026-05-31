@@ -6,14 +6,35 @@ import {
   setStatus,
   REMEDIATION_STATES,
   STATUSES,
+  type Importance,
   type Pin,
+  type PinType,
   type RemediationState,
+  type Severity,
   type Status,
 } from "./api.ts";
 import { PinEditor } from "./PinEditor.tsx";
 
 type DimKind = "project" | "team" | "person" | "asset";
 type View = "all" | "findings" | "project" | "team" | "person" | "asset" | "archive";
+
+interface Filters {
+  type: PinType | "";
+  importance: Importance | "";
+  status: Status | "";
+  severity: Severity | "";
+  remediation: RemediationState | "";
+  due: "overdue" | "today" | "week" | "none" | "";
+  project: string;
+  team: string;
+  person: string;
+  asset: string;
+}
+
+const EMPTY_FILTERS: Filters = {
+  type: "", importance: "", status: "", severity: "",
+  remediation: "", due: "", project: "", team: "", person: "", asset: "",
+};
 
 const DIM_OF: Record<DimKind, (p: Pin) => string[]> = {
   project: (p) => (p.project ? [p.project] : []),
@@ -35,10 +56,7 @@ const VIEWS: { id: View; label: string; icon: string }[] = [
 ];
 
 const GROUPED: Record<string, DimKind | undefined> = {
-  project: "project",
-  team: "team",
-  person: "person",
-  asset: "asset",
+  project: "project", team: "team", person: "person", asset: "asset",
 };
 
 function dueLabel(due: string): string {
@@ -85,52 +103,98 @@ function groupBy(pins: Pin[], by: DimKind): { key: string; pins: Pin[] }[] {
     .map(([key, gp]) => ({ key, pins: gp }));
 }
 
+function applyDueFilter(p: Pin, due: Filters["due"]): boolean {
+  if (!due) return true;
+  const now = Date.now();
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const todayStart = start.getTime();
+  const weekEnd = todayStart + 7 * 86_400_000;
+  if (due === "none") return !p.due;
+  if (!p.due) return false;
+  const ms = new Date(p.due).getTime();
+  if (due === "overdue") return ms < now;
+  if (due === "today") return ms >= todayStart && ms < todayStart + 86_400_000;
+  if (due === "week") return ms >= now && ms <= weekEnd;
+  return true;
+}
+
+function unique(vals: string[]): string[] {
+  return [...new Set(vals)].sort();
+}
+
 export default function App() {
   const [pins, setPins] = useState<Pin[]>([]);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("all");
   const [dimFilter, setDimFilter] = useState<{ kind: DimKind; value: string } | null>(null);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [editing, setEditing] = useState<Pin | null>(null);
   const [collapsed, setCollapsed] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("pinline.sidebar") === "collapsed";
-    } catch {
-      return false;
-    }
+    try { return localStorage.getItem("pinline.sidebar") === "collapsed"; }
+    catch { return false; }
   });
 
   useEffect(() => {
-    try {
-      localStorage.setItem("pinline.sidebar", collapsed ? "collapsed" : "open");
-    } catch {
-      /* ignore */
-    }
+    try { localStorage.setItem("pinline.sidebar", collapsed ? "collapsed" : "open"); }
+    catch { /* ignore */ }
   }, [collapsed]);
 
   async function load() {
-    try {
-      setPins(await fetchPins());
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    try { setPins(await fetchPins()); setError(null); }
+    catch (e) { setError((e as Error).message); }
   }
-  useEffect(() => {
-    void load();
-  }, []);
+  useEffect(() => { void load(); }, []);
 
   const liveCount = pins.filter((p) => p.status !== "done").length;
   const findingCount = pins.filter((p) => p.status !== "done" && p.type === "finding").length;
   const isArchive = view === "archive";
+  const isAll = view === "all";
+
+  // Unique dimension values for filter dropdowns (from all live pins)
+  const livePins = useMemo(() => pins.filter((p) => p.status !== "done"), [pins]);
+  const dimOptions = useMemo(() => ({
+    projects: unique(livePins.flatMap((p) => p.project ? [p.project] : [])),
+    teams: unique(livePins.flatMap((p) => p.teams)),
+    persons: unique(livePins.flatMap((p) => p.persons)),
+    assets: unique(livePins.flatMap((p) => p.assets)),
+  }), [livePins]);
+
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter(Boolean).length + (dimFilter ? 1 : 0),
+    [filters, dimFilter],
+  );
+
+  function setFilter<K extends keyof Filters>(key: K, val: Filters[K]) {
+    setFilters((f) => ({ ...f, [key]: val }));
+  }
+
+  function clearAll() {
+    setFilters(EMPTY_FILTERS);
+    setDimFilter(null);
+  }
 
   const filtered = useMemo(() => {
     let rows = pins.filter((p) => (isArchive ? p.status === "done" : p.status !== "done"));
     if (view === "findings") rows = rows.filter((p) => p.type === "finding");
     if (dimFilter) rows = rows.filter((p) => DIM_OF[dimFilter.kind](p).includes(dimFilter.value));
+
+    if (isAll) {
+      if (filters.type) rows = rows.filter((p) => p.type === filters.type);
+      if (filters.importance) rows = rows.filter((p) => p.importance === filters.importance);
+      if (filters.status) rows = rows.filter((p) => p.status === filters.status);
+      if (filters.severity) rows = rows.filter((p) => p.severity === filters.severity);
+      if (filters.remediation) rows = rows.filter((p) => p.remediation_state === filters.remediation);
+      if (filters.due) rows = rows.filter((p) => applyDueFilter(p, filters.due));
+      if (filters.project) rows = rows.filter((p) => p.project === filters.project);
+      if (filters.team) rows = rows.filter((p) => p.teams.includes(filters.team));
+      if (filters.person) rows = rows.filter((p) => p.persons.includes(filters.person));
+      if (filters.asset) rows = rows.filter((p) => p.assets.includes(filters.asset));
+    }
+
     if (isArchive) rows = [...rows].sort((a, b) => (b.closed ?? "").localeCompare(a.closed ?? ""));
     return rows;
-  }, [pins, view, dimFilter, isArchive]);
+  }, [pins, view, dimFilter, filters, isArchive, isAll]);
 
   const groupKind = GROUPED[view];
   const sections = useMemo(
@@ -143,31 +207,18 @@ export default function App() {
     e.preventDefault();
     const t = text.trim();
     if (!t) return;
-    try {
-      await quickAdd(t);
-      setText("");
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    try { await quickAdd(t); setText(""); await load(); }
+    catch (e) { setError((e as Error).message); }
   }
 
   async function changeStatus(id: string, status: Status) {
-    try {
-      await setStatus(id, status);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    try { await setStatus(id, status); await load(); }
+    catch (e) { setError((e as Error).message); }
   }
 
   async function changeRemediation(id: string, value: RemediationState | null) {
-    try {
-      await setRemediation(id, value);
-      await load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    try { await setRemediation(id, value); await load(); }
+    catch (e) { setError((e as Error).message); }
   }
 
   function chip(kind: DimKind, value: string) {
@@ -179,8 +230,7 @@ export default function App() {
         onClick={() => setDimFilter({ kind, value })}
         title={`filter by ${kind}`}
       >
-        {DIM_SIGIL[kind]}
-        {value}
+        {DIM_SIGIL[kind]}{value}
       </button>
     );
   }
@@ -204,6 +254,19 @@ export default function App() {
               </span>
             )}
             {typeof p.urgency === "number" && p.urgency > 0 && <span className="urg">⚡{p.urgency}</span>}
+            {p.type === "finding" && (
+              <select
+                className="remediation"
+                aria-label="remediation state"
+                value={p.remediation_state ?? ""}
+                onChange={(e) => changeRemediation(p.id, (e.target.value || null) as RemediationState | null)}
+              >
+                <option value="">remediation…</option>
+                {REMEDIATION_STATES.map((s) => (
+                  <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            )}
           </span>
           {(p.project !== null || p.teams.length > 0 || p.persons.length > 0 || p.assets.length > 0) && (
             <span className="chips">
@@ -221,32 +284,32 @@ export default function App() {
             onChange={(e) => changeStatus(p.id, e.target.value as Status)}
           >
             {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s.replace("_", " ")}
-              </option>
+              <option key={s} value={s}>{s.replace("_", " ")}</option>
             ))}
           </select>
-          {p.type === "finding" && (
-            <select
-              className="remediation"
-              aria-label="remediation state"
-              value={p.remediation_state ?? ""}
-              onChange={(e) => changeRemediation(p.id, (e.target.value || null) as RemediationState | null)}
-            >
-              <option value="">remediation…</option>
-              {REMEDIATION_STATES.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-          )}
         </div>
       </li>
     );
   }
 
   const viewLabel = VIEWS.find((v) => v.id === view)?.label ?? "All";
+
+  function fsel(key: keyof Filters, label: string, opts: string[], extra?: string) {
+    const val = filters[key];
+    return (
+      <label key={key} className="fbar-item">
+        <span className="fbar-label">{label}</span>
+        <select
+          value={val}
+          className={val ? "fbar-sel active" : "fbar-sel"}
+          onChange={(e) => setFilter(key, e.target.value as Filters[typeof key])}
+        >
+          <option value="">All</option>
+          {opts.map((o) => <option key={o} value={o}>{extra ? o : o.replace(/_/g, " ")}</option>)}
+        </select>
+      </label>
+    );
+  }
 
   return (
     <div className="app">
@@ -260,17 +323,13 @@ export default function App() {
         >
           {collapsed ? "»" : "«"}
         </button>
-
         <div className="brand">
-          <span className="logo" aria-hidden>
-            ◈
-          </span>
+          <span className="logo" aria-hidden>◈</span>
           <div className="brand-text">
             <h1>PINLINE</h1>
             <p className="tagline">command center</p>
           </div>
         </div>
-
         <nav className="menu">
           {VIEWS.map((v) => (
             <button
@@ -278,25 +337,17 @@ export default function App() {
               type="button"
               className={`menu-item${view === v.id ? " active" : ""}`}
               title={v.label}
-              onClick={() => {
-                setView(v.id);
-                setDimFilter(null);
-              }}
+              onClick={() => { setView(v.id); setDimFilter(null); setFilters(EMPTY_FILTERS); }}
             >
-              <span className="menu-icon" aria-hidden>
-                {v.icon}
-              </span>
+              <span className="menu-icon" aria-hidden>{v.icon}</span>
               <span className="menu-label">{v.label}</span>
               {v.id === "findings" && findingCount > 0 && <span className="badge">{findingCount}</span>}
             </button>
           ))}
         </nav>
-
         <div className="side-foot">
           <span className="dot" />
-          <span className="foot-text">
-            {liveCount} live · {findingCount} findings
-          </span>
+          <span className="foot-text">{liveCount} live · {findingCount} findings</span>
         </div>
       </aside>
 
@@ -306,8 +357,12 @@ export default function App() {
           <span className="count-pill">{filtered.length}</span>
           {dimFilter && (
             <button type="button" className="chip filter-active" onClick={() => setDimFilter(null)}>
-              {DIM_SIGIL[dimFilter.kind]}
-              {dimFilter.value} ✕
+              {DIM_SIGIL[dimFilter.kind]}{dimFilter.value} ✕
+            </button>
+          )}
+          {activeFilterCount > 0 && (
+            <button type="button" className="clear-filters" onClick={clearAll}>
+              clear {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} ✕
             </button>
           )}
         </div>
@@ -321,6 +376,22 @@ export default function App() {
           />
           <button type="submit">Pin it</button>
         </form>
+
+        {/* Filter bar — All view only */}
+        {isAll && (
+          <div className="fbar">
+            {fsel("type", "Type", ["task", "followup", "finding"])}
+            {fsel("importance", "Importance", ["critical", "high", "medium", "low"])}
+            {fsel("status", "Status", ["open", "in_progress", "blocked", "done"])}
+            {fsel("due", "Due", ["overdue", "today", "week", "none"])}
+            {fsel("severity", "Severity", ["critical", "high", "medium", "low", "info"])}
+            {fsel("remediation", "Remediation", REMEDIATION_STATES)}
+            {dimOptions.projects.length > 0 && fsel("project", "Project", dimOptions.projects)}
+            {dimOptions.teams.length > 0 && fsel("team", "Team", dimOptions.teams)}
+            {dimOptions.persons.length > 0 && fsel("person", "Person", dimOptions.persons)}
+            {dimOptions.assets.length > 0 && fsel("asset", "Asset", dimOptions.assets)}
+          </div>
+        )}
 
         {agenda.length > 0 && (
           <div className="agenda">
@@ -351,7 +422,7 @@ export default function App() {
         {error && <p className="error">{error}</p>}
 
         {filtered.length === 0 ? (
-          <p className="empty">{isArchive ? "Archive is empty." : "Nothing here — add a pin above."}</p>
+          <p className="empty">{isArchive ? "Archive is empty." : "Nothing matches."}</p>
         ) : (
           sections.map((s) => (
             <section key={s.key || "all"}>
@@ -371,10 +442,7 @@ export default function App() {
         <PinEditor
           pin={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            void load();
-          }}
+          onSaved={() => { setEditing(null); void load(); }}
         />
       )}
     </div>
